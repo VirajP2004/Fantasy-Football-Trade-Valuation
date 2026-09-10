@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "keeper_trade_engine"
+version = "0.1.0"
+dependencies = [
+    "pandas",
+    "numpy",
+    "xgboost",
+    "scikit-learn",
+    "shap",
+    "matplotlib",
+    "pytest",
+    "pyyaml"
+]
+
+[tool.setuptools.packages.find]
+where = ["."]

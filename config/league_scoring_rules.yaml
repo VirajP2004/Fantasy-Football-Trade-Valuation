@@ -1,0 +1,29 @@
+passing:
+  passing_yds: 0.04
+  passing_td: 4.0
+  passing_two_pt: 2.0
+  interceptions: -1.0
+
+rushing:
+  rushing_yds: 0.1
+  rushing_td: 6.0
+  rushing_two_pt: 2.0
+
+receiving:
+  receptions: 0.5
+  receiving_yds: 0.1
+  receiving_td: 6.0
+  receiving_two_pt: 2.0
+
+kicking:
+  fg_0_19: 3.0
+  fg_20_29: 3.0
+  fg_30_39: 3.0
+  fg_40_49: 4.0
+  fg_50_plus: 5.0
+  pat_made: 1.0
+  pat_missed: -1.0
+  fg_missed: -1.0
+
+fumbles:
+  fumbles_lost: -2.0

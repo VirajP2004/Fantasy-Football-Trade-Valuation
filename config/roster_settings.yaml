@@ -1,0 +1,11 @@
+starters:
+  QB: 1
+  RB: 2
+  WR: 2
+  TE: 1
+  FLEX: 3
+  K: 1
+  DEF: 1
+
+bench_slots: 7
+total_teams: 10
