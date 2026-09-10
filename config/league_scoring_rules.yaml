@@ -24,6 +24,21 @@ kicking:
   pat_made: 1.0
   pat_missed: -1.0
   fg_missed: -1.0
-
+Defense:
+  sacks: 1.0
+  interceptions: 2.0
+  fumble_recovery: 2.0
+  defensive_td: 6.0
+  safety: 2.0
+  Forced Funbles: 1.0
+  Blocked Kicks: 2.0
+  points_allowed_0: 10.0
+  points_allowed_1_6: 7.0
+  points_allowed_7_13: 4.0
+  points_allowed_14_20: 1.0
+  points_allowed_21_27: 0
+  points_allowed_28_34: -1.0
+  points_allowed_35_plus: -4.0
 fumbles:
   fumbles_lost: -2.0
+  
