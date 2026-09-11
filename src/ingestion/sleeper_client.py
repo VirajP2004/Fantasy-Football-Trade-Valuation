@@ -79,3 +79,14 @@ def get_transactions(league_id: str, week: int) -> list[dict]:
     """Trades/waivers/free-agent moves for a given week. Sleeper requires
     a week parameter; call across weeks 1-18 to get a full season."""
     return _get(f"/league/{league_id}/transactions/{week}")
+
+
+def get_all_players() -> dict:
+    """
+    Full NFL player dictionary, keyed by player_id. This is a large
+    payload (several MB) and Sleeper explicitly asks callers to use it
+    sparingly — at most once a day. Cache the result locally (see
+    scripts/sanity_check_2026_keepers.py) rather than calling this on
+    every run.
+    """
+    return _get("/players/nfl")

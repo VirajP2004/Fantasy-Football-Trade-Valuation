@@ -5,18 +5,27 @@
 league_id: "1371612837679464448"
 
 escalation:
-  # FLAT, not compounding, confirmed by the commissioner: a kept player
-  # always costs (original draft round - rounds_lost_flat), no matter how
-  # many consecutive years in a row they've been kept. e.g. drafted Rd 8 ->
-  # kept once = Rd 6 -> kept again = still Rd 6 (NOT Rd 4).
-  rounds_lost_flat: 2
+  # CONFIRMED with commissioner: COMPOUNDING, not flat. Every consecutive
+  # year a player is kept, the cost drops another `rounds_lost` rounds
+  # from wherever it currently sits. Drafted Rd 8 -> kept = Rd 6 -> kept
+  # again = Rd 4 -> kept again = Rd 2. It never plateaus.
+  rounds_lost: 2
   min_round: 1                          # floor; cost never drops below Round 1
-
-  # This flat rule took effect starting the 2026 season. Seasons before
-  # this are NOT checked against it — expected_round_formula is left null
-  # and formula_mismatch is False for those rows, since whatever rule (if
-  # any) governed keeper cost pre-2026 is not modeled here.
-  rule_start_season: 2026
+  compounding: true
+  rule_effective_season: 2026           # this rule started in 2026 — seasons before this
+                                         # are NOT checked against it, AND any keeper streak
+                                         # from before this season does not count toward the
+                                         # compounding counter (2026 is always step 1, even if
+                                         # the player was already being kept under an older/no
+                                         # formal rule beforehand)
+  total_draft_rounds_by_season:         # CONFIRMED with commissioner: the league ran 15 rounds
+                                         # in 2024, then shifted to 18 rounds from 2025 onward.
+                                         # Used as the "never drafted anywhere" UDFA fallback —
+                                         # a player with no fresh-draft record is treated as if
+                                         # drafted in the LAST round of whichever season you're
+                                         # resolving the anchor as of.
+    2024: 15
+    _default: 18                        # applies to 2025 and every season after
 
 trade_inheritance:
   # When a kept player is traded, does the ACQUIRING owner inherit the

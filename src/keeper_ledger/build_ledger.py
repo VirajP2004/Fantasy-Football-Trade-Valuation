@@ -98,72 +98,128 @@ def load_keeper_rules(config_path: str = "config/keeper_rules.yaml") -> dict:
         return yaml.safe_load(f)
 
 
+def build_player_draft_anchors(draft_history: pd.DataFrame) -> pd.DataFrame:
+    """
+    League-wide "what round was this player actually drafted at" anchor —
+    NOT scoped to any one owner. A fresh (is_keeper False) pick is a fact
+    about the PLAYER, not about whoever happened to draft them: if Owner A
+    drafts Rashee Rice at 9.07 in 2024, gets dropped, and Owner C later
+    picks him up on waivers and keeps him in 2026, the round C loses is
+    still anchored to that 2024 pick — C never drafted Rice themselves,
+    but the player's draft history didn't reset just because he changed
+    hands off-draft.
+
+    Returns columns: player_id, season, anchor_round — one row per season
+    a fresh draft pick of that player happened, anywhere in the league.
+    Use `effective_original_round()` below to look up the anchor that was
+    in force as of any given season.
+    """
+    fresh = draft_history[draft_history["is_keeper"].fillna(False) == False]  # noqa: E712
+    return (
+        fresh.groupby(["player_id", "season"], as_index=False)["round"]
+        .first()
+        .rename(columns={"round": "anchor_round"})
+        .sort_values(["player_id", "season"])
+    )
+
+
+def effective_original_round(anchors: pd.DataFrame, player_id: str, as_of_season: int):
+    """Most recent fresh-draft round on record for this player at or
+    before as_of_season, league-wide. None if the player has never been
+    drafted in any recorded season (a true UDFA/waiver-only add — see
+    resolve_original_round() for the fallback rule)."""
+    hits = anchors[(anchors["player_id"] == player_id) & (anchors["season"] <= as_of_season)]
+    if hits.empty:
+        return None
+    return hits.sort_values("season").iloc[-1]["anchor_round"]
+
+
+def total_rounds_for_season(season: int, rules: dict) -> int:
+    """League ran 15 rounds in 2024, 18 rounds from 2025 onward
+    (confirmed with commissioner) — see total_draft_rounds_by_season."""
+    by_season = rules["escalation"]["total_draft_rounds_by_season"]
+    return by_season.get(season, by_season["_default"])
+
+
+def resolve_original_round(anchors: pd.DataFrame, player_id: str, as_of_season: int, rules: dict):
+    """
+    Like effective_original_round(), but never returns None. CONFIRMED
+    with commissioner: a player who has never been through a live draft
+    pick anywhere in league history (waiver-wire/UDFA add) is treated as
+    if drafted in the LAST round of whichever season you're resolving as
+    of (15 in 2024, 18 from 2025 onward) — so their first keep costs
+    (total_rounds_that_season - rounds_lost).
+    """
+    anchor = effective_original_round(anchors, player_id, as_of_season)
+    return anchor if anchor is not None else total_rounds_for_season(as_of_season, rules)
+
+
 def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFrame:
     """
     For each (owner_id, player_id) chain, sorted chronologically:
-      - a pick with is_keeper falsy (False/None/NaN) is a fresh draft:
-        resets the escalation chain, anchors `original_round`.
-      - a pick with is_keeper truthy increments `consecutive_keeps` and
-        keeps the prior `original_round` anchor.
+      - a pick with is_keeper falsy (False/None/NaN) is a fresh draft.
+      - a pick with is_keeper truthy COMPOUNDS off the player's LEAGUE-WIDE
+        draft anchor (see build_player_draft_anchors): cost = `original_round
+        - rounds_lost * keeps_since_rule_start`.
 
-    The keeper discount is FLAT, not compounding (commissioner-confirmed):
-    a kept player always costs (original_round - rounds_lost_flat), no
-    matter how many consecutive years in a row they've been kept — it does
-    not escalate further each year. This flat rule took effect starting
-    `rule_start_season`; seasons before that are not checked against it, so
-    `expected_round_formula` is left null and `formula_mismatch` is False
-    for those rows (fresh-draft rows are the one exception — a fresh draft
-    trivially "expects" the round it was actually drafted at, so that part
-    is season-independent).
+    original_round resolves league-wide (not owner-scoped — a waiver
+    pickup still anchors to wherever the player was actually drafted),
+    with a fallback to the last round of whichever season is being
+    resolved for players never drafted at all (see resolve_original_round
+    / total_rounds_for_season — the league ran 15 rounds in 2024, 18 from
+    2025 onward).
 
-    `expected_round_formula` / `formula_mismatch` are the data-quality
-    signal for missed is_keeper flags or off-book league rule exceptions,
-    scoped to seasons the flat rule actually governed.
+    Two different counters matter here, and conflating them was a real
+    bug (caught via a real example: a player kept once BEFORE the 2026
+    rule existed, then kept again in 2026, was incorrectly compounding as
+    if 2026 were the player's SECOND rule-era keep instead of the first):
+      - `consecutive_keeps`: the owner's full keep-streak across all of
+        recorded history, regardless of which rule was in effect. Kept
+        for reference/debugging only — NOT used in the formula.
+      - `keeps_since_rule_start`: resets to 0 the moment a chain crosses
+        into `rule_effective_season`, independent of whatever streak
+        existed before. THIS is what the compounding formula uses — 2026
+        is always step 1 for any player, even if they were already being
+        kept under an older or informal rule beforehand.
+
+    `expected_round_formula`/`formula_mismatch` are only computed for
+    season >= `rule_effective_season`; earlier seasons are recorded but
+    not validated, since a different or no formal rule applied then.
     """
-    rounds_lost = rules["escalation"]["rounds_lost_flat"]
+    rounds_lost = rules["escalation"]["rounds_lost"]
     min_round = rules["escalation"]["min_round"]
-    rule_start_season = rules["escalation"].get("rule_start_season")
+    rule_effective_season = rules["escalation"]["rule_effective_season"]
+
+    anchors = build_player_draft_anchors(draft_history)
 
     ledger_rows = []
 
     for (owner_id, player_id), grp in draft_history.groupby(["owner_id", "player_id"]):
         grp = grp.sort_values("season")
         consecutive_keeps = 0
-        original_round = None
+        keeps_since_rule_start = 0
+        entered_rule_era = False
 
         for _, row in grp.iterrows():
             is_keeper = bool(row["is_keeper"]) if pd.notna(row["is_keeper"]) else False
+            consecutive_keeps = 0 if not is_keeper else consecutive_keeps + 1
 
-            if not is_keeper:
-                original_round = row["round"]
-                consecutive_keeps = 0
-            else:
-                consecutive_keeps += 1
+            rule_applies = row["season"] >= rule_effective_season
+            if rule_applies and not entered_rule_era:
+                # First row at/after the rule's start for this chain: the
+                # compounding counter restarts here NO MATTER what the
+                # keep streak looked like before the rule existed.
+                keeps_since_rule_start = 0
+                entered_rule_era = True
 
-            # The flat formula's answer, independent of season — used both
-            # as the validated `expected_round_formula` (when in scope) and
-            # as the always-on `next_season_keeper_round` projection below.
-            flat_round = (
-                max(min_round, original_round - rounds_lost)
-                if original_round is not None else None
+            if rule_applies:
+                keeps_since_rule_start = 0 if not is_keeper else keeps_since_rule_start + 1
+
+            original_round = resolve_original_round(anchors, player_id, row["season"], rules)
+            expected_round = (
+                max(min_round, original_round - rounds_lost * keeps_since_rule_start)
+                if rule_applies else None
             )
-
-            rule_in_effect = (
-                rule_start_season is None or row["season"] >= rule_start_season
-            )
-
-            if original_round is None:
-                expected_round = None
-            elif not is_keeper:
-                # Fresh draft: the round paid IS the round drafted at — this
-                # trivially "matches" regardless of season/rule scope.
-                expected_round = original_round
-            elif rule_in_effect:
-                expected_round = flat_round
-            else:
-                # Kept before the flat rule took effect — not modeled, so
-                # don't validate/flag against it.
-                expected_round = None
 
             ledger_rows.append({
                 "season": row["season"],
@@ -172,15 +228,25 @@ def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFram
                 "round_paid_actual": row["round"],
                 "is_keeper": is_keeper,
                 "consecutive_keeps": consecutive_keeps,
+                "keeps_since_rule_start": keeps_since_rule_start if rule_applies else None,
                 "original_round": original_round,
                 "expected_round_formula": expected_round,
                 "formula_mismatch": (
                     expected_round is not None and expected_round != row["round"]
                 ),
-                "next_season_keeper_round": flat_round,
             })
 
-    return pd.DataFrame(ledger_rows)
+    ledger = pd.DataFrame(ledger_rows)
+
+    # Forward-looking projection: next season, if this owner keeps this
+    # player again, the cost is THIS year's actual round minus another
+    # rounds_lost — this doesn't need the era counter, it's just "one
+    # more compounding step from wherever they currently sit."
+    ledger["next_season_keeper_round"] = (
+        (ledger["round_paid_actual"] - rounds_lost).clip(lower=min_round)
+    )
+
+    return ledger
 
 
 # ---------------------------------------------------------------------------
