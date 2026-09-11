@@ -1,0 +1,39 @@
+# Keeper escalation rules — league-specific. Confirm every value against
+# your actual league bylaws before trusting Stage 2 output; get any of
+# these wrong and every fairness score downstream is silently biased.
+
+league_id: "1371612837679464448"
+
+escalation:
+  # FLAT, not compounding, confirmed by the commissioner: a kept player
+  # always costs (original draft round - rounds_lost_flat), no matter how
+  # many consecutive years in a row they've been kept. e.g. drafted Rd 8 ->
+  # kept once = Rd 6 -> kept again = still Rd 6 (NOT Rd 4).
+  rounds_lost_flat: 2
+  min_round: 1                          # floor; cost never drops below Round 1
+
+  # This flat rule took effect starting the 2026 season. Seasons before
+  # this are NOT checked against it — expected_round_formula is left null
+  # and formula_mismatch is False for those rows, since whatever rule (if
+  # any) governed keeper cost pre-2026 is not modeled here.
+  rule_start_season: 2026
+
+trade_inheritance:
+  # When a kept player is traded, does the ACQUIRING owner inherit the
+  # escalated cost, or does it reset to the player's original draft round?
+  # NOTE: with Sleeper, this question is mostly moot for historical seasons —
+  # each season's actual draft round paid is recorded directly in the draft
+  # data regardless of who traded for whom beforehand, so the ledger reads
+  # the true cost paid rather than simulating it. This flag matters only if
+  # you want to PROJECT a future keeper cost for a player who was traded
+  # mid-season and hasn't been kept again yet.
+  reset_on_trade: false
+
+keeper_flag_source:
+  # Sleeper's `is_keeper` field on draft picks is frequently null even in
+  # active keeper leagues — many commissioners never set it when starting
+  # the draft. 'sleeper_native' trusts the field as-is (nulls treated as
+  # False / fresh draft). 'manual_override' additionally applies a CSV of
+  # known keeper picks for seasons where the flag wasn't populated.
+  mode: sleeper_native
+  manual_override_path: data/raw/manual_keeper_overrides.csv
