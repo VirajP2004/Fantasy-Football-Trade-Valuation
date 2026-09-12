@@ -80,5 +80,54 @@ def test_fumbles_penalty_is_flat_regardless_of_position():
     assert qb_fp == rb_fp
 
 
+# Ka'imi Fairbairn's real 2025 season stats (data/raw/raw_seasonal_stats.csv).
+# Verified against this league's actual live Sleeper scoring (summed
+# players_points across all 18 fantasy weeks he was rostered): the real
+# season total is 190.0. Computing from raw stats without counting his 1
+# blocked FG as a miss gives 191.0 — confirming blocked kicks must fold
+# into fg_missed/pat_missed or the kicking category silently overcounts.
+FAIRBAIRN_2025 = {
+    "fg_made_0_19": 0,
+    "fg_made_20_29": 8,
+    "fg_made_30_39": 11,
+    "fg_made_40_49": 16,
+    "fg_made_50_59": 9,
+    "fg_made_60_": 0,
+    "fg_missed": 3,
+    "fg_blocked": 1,
+    "pat_made": 28,
+    "pat_missed": 0,
+    "pat_blocked": 0,
+}
+
+
+def test_kicker_scoring_regression_fairbairn_2025():
+    """Regression guard for the kicker scoring gap: apply_scoring.py used
+    to have no "kicking" section at all, so every kicker scored 0.0
+    regardless of performance. Pins Ka'imi Fairbairn's real, Sleeper-
+    verified 2025 season total."""
+    rules = load_scoring_rules()
+    df = pd.DataFrame([FAIRBAIRN_2025])
+    fp = compute_fantasy_points(df, rules).iloc[0]
+    assert fp == pytest.approx(190.0)
+
+
+def test_blocked_kicks_count_as_misses():
+    """A blocked FG/PAT must be penalized the same as a missed one — this
+    is what the naive per-column mapping (fg_missed only, ignoring
+    fg_blocked) gets wrong, and it's a real, silent 1-point-per-block
+    undercount if skipped."""
+    rules = load_scoring_rules()
+
+    without_blocks = {**FAIRBAIRN_2025, "fg_blocked": 0}
+    with_blocks = FAIRBAIRN_2025
+
+    fp_without = compute_fantasy_points(pd.DataFrame([without_blocks]), rules).iloc[0]
+    fp_with = compute_fantasy_points(pd.DataFrame([with_blocks]), rules).iloc[0]
+
+    fg_missed_weight = rules["kicking"]["fg_missed"]
+    assert fp_with - fp_without == pytest.approx(fg_missed_weight)
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

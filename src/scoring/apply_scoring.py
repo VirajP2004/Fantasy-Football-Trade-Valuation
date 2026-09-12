@@ -55,6 +55,64 @@ def compute_fantasy_points(df, rules):
     if "fumbles_lost_total" in df.columns:
         fp += df["fumbles_lost_total"].fillna(0) * get_rule(rules, "fumbles", "fumbles_lost")
 
+    # Kicking — field goals bucketed by distance, PATs, and misses.
+    if "fg_made_0_19" in df.columns:
+        fp += df["fg_made_0_19"].fillna(0) * get_rule(rules, "kicking", "fg_0_19")
+    if "fg_made_20_29" in df.columns:
+        fp += df["fg_made_20_29"].fillna(0) * get_rule(rules, "kicking", "fg_20_29")
+    if "fg_made_30_39" in df.columns:
+        fp += df["fg_made_30_39"].fillna(0) * get_rule(rules, "kicking", "fg_30_39")
+    if "fg_made_40_49" in df.columns:
+        fp += df["fg_made_40_49"].fillna(0) * get_rule(rules, "kicking", "fg_40_49")
+
+    # league_scoring_rules.yaml has one combined "fg_50_plus" bucket, but
+    # the raw dataset splits it into two distance columns — sum both.
+    long_fgs_made = pd.Series(0, index=df.index)
+    has_long_fg_data = False
+    if "fg_made_50_59" in df.columns:
+        long_fgs_made = long_fgs_made + df["fg_made_50_59"].fillna(0)
+        has_long_fg_data = True
+    if "fg_made_60_" in df.columns:
+        long_fgs_made = long_fgs_made + df["fg_made_60_"].fillna(0)
+        has_long_fg_data = True
+    if has_long_fg_data:
+        fp += long_fgs_made * get_rule(rules, "kicking", "fg_50_plus")
+
+    if "pat_made" in df.columns:
+        fp += df["pat_made"].fillna(0) * get_rule(rules, "kicking", "pat_made")
+
+    # A BLOCKED kick isn't itemized as its own rule in
+    # league_scoring_rules.yaml, but it's still a failed attempt from the
+    # kicker's perspective — folded into that kick type's "missed" count.
+    # Verified against this league's actual live Sleeper scoring: a
+    # kicker with 1 blocked FG and full-season roster coverage matched
+    # Sleeper's real season total exactly only once fg_blocked was
+    # counted alongside fg_missed (same confirmed for pat_blocked /
+    # pat_missed via a separate kicker) — leaving blocks unscored would
+    # silently undercount the penalty by 1 point per block, the same
+    # class of bug as the fumbles_lost column mismatch.
+    fg_missed_total = pd.Series(0, index=df.index)
+    has_fg_missed_data = False
+    if "fg_missed" in df.columns:
+        fg_missed_total = fg_missed_total + df["fg_missed"].fillna(0)
+        has_fg_missed_data = True
+    if "fg_blocked" in df.columns:
+        fg_missed_total = fg_missed_total + df["fg_blocked"].fillna(0)
+        has_fg_missed_data = True
+    if has_fg_missed_data:
+        fp += fg_missed_total * get_rule(rules, "kicking", "fg_missed")
+
+    pat_missed_total = pd.Series(0, index=df.index)
+    has_pat_missed_data = False
+    if "pat_missed" in df.columns:
+        pat_missed_total = pat_missed_total + df["pat_missed"].fillna(0)
+        has_pat_missed_data = True
+    if "pat_blocked" in df.columns:
+        pat_missed_total = pat_missed_total + df["pat_blocked"].fillna(0)
+        has_pat_missed_data = True
+    if has_pat_missed_data:
+        fp += pat_missed_total * get_rule(rules, "kicking", "pat_missed")
+
     return fp
 
 def main():

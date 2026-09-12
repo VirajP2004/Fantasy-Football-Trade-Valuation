@@ -90,3 +90,51 @@ def get_all_players() -> dict:
     every run.
     """
     return _get("/players/nfl")
+
+
+def get_matchups(league_id: str, week: int) -> list[dict]:
+    """
+    Actual starting lineups for a given week: one entry per roster, with
+    a `starters` list of player_ids in the SAME ORDER as the league's
+    `roster_positions` (excluding BN/taxi/IR slots). Zip the two together
+    to know which slot (QB/RB/WR/TE/FLEX/K/DEF) each starter actually
+    filled that week — this is what lets you measure the real FLEX
+    position split instead of assuming one.
+    """
+    return _get(f"/league/{league_id}/matchups/{week}")
+
+
+def get_stats_week(season: int, week: int) -> dict:
+    """
+    Raw weekly stats for every player AND team unit, keyed by id. This
+    endpoint mixes several different kinds of entries under one dict —
+    numeric player_ids, `TEAM_<ABBR>` entries (that team's own aggregate
+    OFFENSIVE box score — pass_yd, rush_yd, etc., NOT defense), and plain
+    `<ABBR>` entries (that team's actual DEFENSE/special-teams stat line).
+
+    This wrapper filters down to ONLY the plain team-abbreviation keys —
+    real team defense — dropping every numeric player_id and every
+    `TEAM_`-prefixed entry. Filtered by PATTERN (non-numeric, not
+    `TEAM_`-prefixed), not a hardcoded list of current team abbreviations
+    — Sleeper uses ERA-ACCURATE codes for relocated/renamed franchises
+    (OAK not LV pre-2020, SD not LAC pre-2017, STL not LAR pre-2016), so
+    a hardcoded current-team allowlist would silently drop those
+    franchises' historical seasons. Confirmed clean across 2009/2015/
+    2020/2025: exactly 32 real team codes every time, nothing stray.
+
+    Also confirmed via a real example: `TEAM_DET`'s "td" and plain
+    `DET`'s "td" were identical (both mirroring the team's total
+    OFFENSIVE touchdowns) — "td" on the plain entry is NOT a
+    defense-only stat, so don't use it for defensive scoring; sum the
+    specific sub-fields instead (def_td, def_pr_td, def_kr_td,
+    blk_kick_ret_td, blk_pr_td, def_st_td).
+
+    Returns {} for a season/week this endpoint has no data for (e.g.
+    2008 and earlier — confirmed empty across every week checked) rather
+    than raising, since an empty dict is a legitimate "no data" signal
+    here, not an error.
+    """
+    data = _get(f"/stats/nfl/regular/{season}/{week}")
+    if not isinstance(data, dict):
+        return {}
+    return {k: v for k, v in data.items() if not k.isdigit() and not k.startswith("TEAM_")}
