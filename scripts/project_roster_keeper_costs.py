@@ -13,12 +13,15 @@ import pandas as pd
 from src.ingestion import sleeper_client as sc
 from src.keeper_ledger.build_ledger import (
     build_player_draft_anchors,
+    build_pre_rule_round_history,
     resolve_original_round,
+    total_rounds_for_season,
     load_keeper_rules,
 )
 from scripts.sanity_check_2026_keepers import load_players, load_owner_names
 
 PROJECTION_SEASON = 2027
+CURRENT_SEASON = 2026
 
 
 def main():
@@ -33,6 +36,7 @@ def main():
     draft_2026 = draft_history[draft_history["season"] == 2026]
 
     anchors = build_player_draft_anchors(draft_history)
+    pre_rule_rounds = build_pre_rule_round_history(draft_history, rules["escalation"]["rule_effective_season"])
     players = load_players()
     owner_names = load_owner_names(league_id)
 
@@ -67,8 +71,24 @@ def main():
                 else 0
             )
 
-            has_anchor = not anchors[anchors["player_id"] == player_id].empty
-            original_round = resolve_original_round(anchors, player_id, PROJECTION_SEASON, rules)
+            has_fresh_anchor = not anchors[anchors["player_id"] == player_id].empty
+
+            if drafted_2026_round is None:
+                # CONFIRMED with commissioner: a genuine in-season waiver
+                # add THIS YEAR (no 2026 draft row at all — never occupied
+                # a live draft slot) is treated as round 18 for 2026, full
+                # stop, regardless of any unrelated draft history this
+                # player_id might have under a different owner in a past
+                # season. There's nothing to explain/validate here (unlike
+                # Rice/Irving/Watson, who all DO have a real 2026 draft
+                # row whose round the league-wide anchor accounts for) —
+                # this is purely a hypothetical projection from scratch.
+                original_round = total_rounds_for_season(CURRENT_SEASON, rules)
+                source_note = f"in-season waiver add — treated as round {original_round} for {CURRENT_SEASON}"
+            else:
+                original_round = resolve_original_round(anchors, pre_rule_rounds, player_id, PROJECTION_SEASON, rules)
+                source_note = "" if has_fresh_anchor else "no fresh-draft record — used pre-rule/last-round fallback"
+
             projected_round = max(
                 min_round, original_round - rounds_lost * (keeps_since_rule_start_2026 + 1)
             )
@@ -86,7 +106,7 @@ def main():
                 "position": p.get("position", "?"),
                 "drafted_2026_round": drafted_2026_round if drafted_2026_round is not None else "waiver add (no 2026 draft pick)",
                 f"round_lost_if_kept_{PROJECTION_SEASON}": projected_round,
-                "note": "" if has_anchor else "no draft record on file — using last-round (18) fallback",
+                "note": source_note,
             })
 
     report = pd.DataFrame(rows).sort_values(["owner", "player"])

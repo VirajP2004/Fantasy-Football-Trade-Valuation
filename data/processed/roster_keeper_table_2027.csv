@@ -8,7 +8,7 @@ Aumr11,Garrett Wilson,WR,4,2,
 Aumr11,Houston Texans,DEF,12,10,
 Aumr11,Hunter Henry,TE,13,11,
 Aumr11,Jacory Croskey-Merritt,RB,16,14,
-Aumr11,Jaxson Dart,QB,16,14,no draft record on file — using last-round (18) fallback
+Aumr11,Jaxson Dart,QB,16,14,no fresh-draft record — used pre-rule/last-round fallback
 Aumr11,Jordan Mason,RB,9,7,
 Aumr11,Kayshon Boutte,WR,15,13,
 Aumr11,Kenneth Walker,RB,2,1,
@@ -30,7 +30,7 @@ ChocoLitMilk,Jalen Hurts,QB,8,6,
 ChocoLitMilk,Jalen Nailor,WR,18,16,
 ChocoLitMilk,Jayden Daniels,QB,14,12,
 ChocoLitMilk,Jeremiyah Love,RB,3,1,
-ChocoLitMilk,Los Angeles Rams,DEF,16,14,no draft record on file — using last-round (18) fallback
+ChocoLitMilk,Los Angeles Rams,DEF,16,14,no fresh-draft record — used pre-rule/last-round fallback
 ChocoLitMilk,Mike Evans,WR,6,4,
 ChocoLitMilk,Travis Etienne,RB,7,5,
 ChocoLitMilk,Trey Smack,K,15,13,
@@ -73,7 +73,7 @@ Harsh352,Travis Kelce,TE,9,7,
 Harsh352,TreVeyon Henderson,RB,7,5,
 ItsAki,Caleb Douglas,WR,15,13,
 ItsAki,Chase Brown,RB,10,8,
-ItsAki,Chase McLaughlin,K,waiver add (no 2026 draft pick),15,
+ItsAki,Chase McLaughlin,K,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 ItsAki,Dallas Goedert,TE,14,12,
 ItsAki,Davante Adams,WR,5,3,
 ItsAki,Emeka Egbuka,WR,7,5,
@@ -85,7 +85,7 @@ ItsAki,Keaton Mitchell,RB,13,11,
 ItsAki,Kyren Williams,RB,3,1,
 ItsAki,Luther Burden,WR,4,2,
 ItsAki,Malik Nabers,WR,2,1,
-ItsAki,Michael Wilson,WR,16,14,no draft record on file — using last-round (18) fallback
+ItsAki,Michael Wilson,WR,16,14,no fresh-draft record — used pre-rule/last-round fallback
 ItsAki,Minnesota Vikings,DEF,17,15,
 ItsAki,Rico Dowdle,RB,6,4,
 ItsAki,Tank Bigsby,RB,12,10,
@@ -93,7 +93,7 @@ ItsAki,Tucker Kraft,TE,5,3,
 MasterOftheGalaxy,Brian Robinson,RB,14,12,
 MasterOftheGalaxy,Chris Godwin,WR,9,7,
 MasterOftheGalaxy,Chris Olave,WR,6,4,
-MasterOftheGalaxy,Christian Watson,WR,16,5,
+MasterOftheGalaxy,Christian Watson,WR,16,14,
 MasterOftheGalaxy,Chuba Hubbard,RB,8,6,
 MasterOftheGalaxy,De'Von Achane,RB,1,1,
 MasterOftheGalaxy,Drake London,WR,2,1,
@@ -111,11 +111,11 @@ MasterOftheGalaxy,Tyrone Tracy,RB,12,10,
 VirajPatel,Alec Pierce,WR,10,8,
 VirajPatel,Baltimore Ravens,DEF,15,13,
 VirajPatel,Breece Hall,RB,3,1,
-VirajPatel,Bucky Irving,RB,13,14,no draft record on file — using last-round (18) fallback
-VirajPatel,Dontayvion Wicks,WR,waiver add (no 2026 draft pick),11,
+VirajPatel,Bucky Irving,RB,13,11,no fresh-draft record — used pre-rule/last-round fallback
+VirajPatel,Dontayvion Wicks,WR,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 VirajPatel,Drake Maye,QB,7,5,
 VirajPatel,Eddy Pineiro,K,18,16,
-VirajPatel,Harold Fannin,TE,16,14,no draft record on file — using last-round (18) fallback
+VirajPatel,Harold Fannin,TE,16,14,no fresh-draft record — used pre-rule/last-round fallback
 VirajPatel,Ja'Marr Chase,WR,1,1,
 VirajPatel,Jaylen Waddle,WR,4,2,
 VirajPatel,Kaelon Black,RB,17,15,
@@ -131,10 +131,10 @@ bigounce1999,Brandon Aubrey,K,13,11,
 bigounce1999,Cam Skattebo,RB,8,6,
 bigounce1999,DeVonta Smith,WR,3,1,
 bigounce1999,Deebo Samuel,WR,12,10,
-bigounce1999,Devaughn Vele,WR,waiver add (no 2026 draft pick),16,no draft record on file — using last-round (18) fallback
+bigounce1999,Devaughn Vele,WR,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 bigounce1999,George Kittle,TE,7,5,
 bigounce1999,George Pickens,WR,2,1,
-bigounce1999,Jacksonville Jaguars,DEF,waiver add (no 2026 draft pick),16,no draft record on file — using last-round (18) fallback
+bigounce1999,Jacksonville Jaguars,DEF,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 bigounce1999,Jahmyr Gibbs,RB,1,1,
 bigounce1999,Jake Ferguson,TE,15,13,
 bigounce1999,Josh Allen,QB,4,2,
@@ -161,7 +161,7 @@ fatuglyking,Jordan Love,QB,17,15,
 fatuglyking,Mark Andrews,TE,12,10,
 fatuglyking,New England Patriots,DEF,15,13,
 fatuglyking,Rashid Shaheed,WR,13,11,
-fatuglyking,Roschon Johnson,RB,waiver add (no 2026 draft pick),13,
+fatuglyking,Roschon Johnson,RB,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 fatuglyking,Zay Flowers,WR,4,2,
 shreydudhat,Bhayshul Tuten,RB,4,2,
 shreydudhat,Denver Broncos,DEF,13,11,
@@ -171,12 +171,12 @@ shreydudhat,Jason Myers,K,14,12,
 shreydudhat,Jaxon Smith-Njigba,WR,8,6,
 shreydudhat,Joe Burrow,QB,9,7,
 shreydudhat,Jordyn Tyson,WR,12,10,
-shreydudhat,Kaleb Johnson,RB,waiver add (no 2026 draft pick),5,
+shreydudhat,Kaleb Johnson,RB,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 shreydudhat,Khalil Shakir,WR,18,16,
 shreydudhat,Ladd McConkey,WR,7,5,
-shreydudhat,Malik Davis,RB,waiver add (no 2026 draft pick),16,no draft record on file — using last-round (18) fallback
+shreydudhat,Malik Davis,RB,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 shreydudhat,Matthew Golden,WR,10,8,
-shreydudhat,Michael Mayer,TE,waiver add (no 2026 draft pick),16,no draft record on file — using last-round (18) fallback
+shreydudhat,Michael Mayer,TE,waiver add (no 2026 draft pick),16,in-season waiver add — treated as round 18 for 2026
 shreydudhat,Puka Nacua,WR,1,1,
 shreydudhat,RJ Harvey,RB,8,6,
 shreydudhat,Sam LaPorta,TE,5,3,

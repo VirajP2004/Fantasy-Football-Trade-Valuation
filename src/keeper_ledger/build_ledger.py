@@ -79,6 +79,11 @@ def apply_manual_overrides(draft_history: pd.DataFrame, override_path: str) -> p
         return draft_history
 
     overrides = pd.read_csv(override_path)
+    # draft_history stores owner_id/player_id as strings (Sleeper IDs are
+    # large integers that pd.read_csv otherwise infers as int64) — cast to
+    # match or the merge below raises a dtype mismatch.
+    overrides["owner_id"] = overrides["owner_id"].astype(draft_history["owner_id"].dtype)
+    overrides["player_id"] = overrides["player_id"].astype(draft_history["player_id"].dtype)
     df = draft_history.merge(
         overrides.rename(columns={"is_keeper": "is_keeper_override"}),
         on=["season", "owner_id", "player_id"],
@@ -123,15 +128,49 @@ def build_player_draft_anchors(draft_history: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def build_pre_rule_round_history(draft_history: pd.DataFrame, rule_effective_season: int) -> pd.DataFrame:
+    """
+    Fallback anchor source, tier 2: for a player with NO genuine
+    is_keeper=False row anywhere (so build_player_draft_anchors has
+    nothing for them), fall back to their most recent recorded round from
+    BEFORE the rule existed — regardless of that row's is_keeper flag.
+
+    Real example this fixes: a player kept continuously since before 2026
+    (e.g. paid round 15 in 2025) with no earlier "fresh draft" row on
+    file at all. Before the rule existed, no round-loss cost applied, so
+    whatever round is recorded pre-rule is a legitimate cost-free
+    baseline — using it beats falling all the way to the generic
+    never-drafted default, which would understate how established the
+    player already was.
+    """
+    pre_rule = draft_history[draft_history["season"] < rule_effective_season]
+    return (
+        pre_rule.groupby(["player_id", "season"], as_index=False)["round"]
+        .first()
+        .rename(columns={"round": "pre_rule_round"})
+        .sort_values(["player_id", "season"])
+    )
+
+
 def effective_original_round(anchors: pd.DataFrame, player_id: str, as_of_season: int):
     """Most recent fresh-draft round on record for this player at or
-    before as_of_season, league-wide. None if the player has never been
-    drafted in any recorded season (a true UDFA/waiver-only add — see
-    resolve_original_round() for the fallback rule)."""
+    before as_of_season, league-wide. None if the player has never had a
+    genuine fresh-draft row (see resolve_original_round for the two
+    fallback tiers)."""
     hits = anchors[(anchors["player_id"] == player_id) & (anchors["season"] <= as_of_season)]
     if hits.empty:
         return None
     return hits.sort_values("season").iloc[-1]["anchor_round"]
+
+
+def effective_pre_rule_round(pre_rule_rounds: pd.DataFrame, player_id: str, rule_effective_season: int):
+    """Most recent pre-rule-era round on record for this player, if any."""
+    hits = pre_rule_rounds[
+        (pre_rule_rounds["player_id"] == player_id) & (pre_rule_rounds["season"] < rule_effective_season)
+    ]
+    if hits.empty:
+        return None
+    return hits.sort_values("season").iloc[-1]["pre_rule_round"]
 
 
 def total_rounds_for_season(season: int, rules: dict) -> int:
@@ -141,17 +180,30 @@ def total_rounds_for_season(season: int, rules: dict) -> int:
     return by_season.get(season, by_season["_default"])
 
 
-def resolve_original_round(anchors: pd.DataFrame, player_id: str, as_of_season: int, rules: dict):
+def resolve_original_round(
+    anchors: pd.DataFrame, pre_rule_rounds: pd.DataFrame, player_id: str, as_of_season: int, rules: dict
+):
     """
-    Like effective_original_round(), but never returns None. CONFIRMED
-    with commissioner: a player who has never been through a live draft
-    pick anywhere in league history (waiver-wire/UDFA add) is treated as
-    if drafted in the LAST round of whichever season you're resolving as
-    of (15 in 2024, 18 from 2025 onward) — so their first keep costs
-    (total_rounds_that_season - rounds_lost).
+    Three-tier fallback, never returns None:
+      1. Most recent genuine fresh-draft (is_keeper=False) round, league-wide.
+      2. Most recent pre-rule-era round on record (any is_keeper flag) —
+         legitimate because no cost applied before the rule existed, so
+         that round is a valid cost-free baseline even if it was itself a
+         (then-uncosted) keeper pick.
+      3. CONFIRMED with commissioner: a player with no record at all is
+         treated as if drafted in the last round of the season you're
+         resolving as of (15 in 2024, 18 from 2025 onward).
     """
     anchor = effective_original_round(anchors, player_id, as_of_season)
-    return anchor if anchor is not None else total_rounds_for_season(as_of_season, rules)
+    if anchor is not None:
+        return anchor
+
+    rule_effective_season = rules["escalation"]["rule_effective_season"]
+    pre_rule_anchor = effective_pre_rule_round(pre_rule_rounds, player_id, rule_effective_season)
+    if pre_rule_anchor is not None:
+        return pre_rule_anchor
+
+    return total_rounds_for_season(as_of_season, rules)
 
 
 def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFrame:
@@ -164,10 +216,8 @@ def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFram
 
     original_round resolves league-wide (not owner-scoped — a waiver
     pickup still anchors to wherever the player was actually drafted),
-    with a fallback to the last round of whichever season is being
-    resolved for players never drafted at all (see resolve_original_round
-    / total_rounds_for_season — the league ran 15 rounds in 2024, 18 from
-    2025 onward).
+    with a fallback to the last round for players never drafted at all
+    (see resolve_original_round).
 
     Two different counters matter here, and conflating them was a real
     bug (caught via a real example: a player kept once BEFORE the 2026
@@ -191,6 +241,7 @@ def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFram
     rule_effective_season = rules["escalation"]["rule_effective_season"]
 
     anchors = build_player_draft_anchors(draft_history)
+    pre_rule_rounds = build_pre_rule_round_history(draft_history, rule_effective_season)
 
     ledger_rows = []
 
@@ -215,7 +266,7 @@ def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFram
             if rule_applies:
                 keeps_since_rule_start = 0 if not is_keeper else keeps_since_rule_start + 1
 
-            original_round = resolve_original_round(anchors, player_id, row["season"], rules)
+            original_round = resolve_original_round(anchors, pre_rule_rounds, player_id, row["season"], rules)
             expected_round = (
                 max(min_round, original_round - rounds_lost * keeps_since_rule_start)
                 if rule_applies else None

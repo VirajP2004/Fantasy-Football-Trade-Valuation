@@ -209,5 +209,24 @@ def test_undrafted_fallback_uses_15_rounds_for_2024():
     assert row["original_round"] == 15  # not 18
 
 
+def test_pre_rule_only_history_used_before_udfa_fallback():
+    """THE IRVING CASE: a player with NO genuine fresh-draft row anywhere,
+    but who WAS a real (cost-free) keeper before the rule started, should
+    anchor to that pre-rule round — not fall all the way to the generic
+    never-drafted default. Real numbers: kept cost-free at round 15 in
+    2025, first rule-era keep in 2026 costs round 13 (15-2), projected
+    2027 costs round 11 (13-2)."""
+    df = pd.DataFrame([
+        {"season": 2025, "owner_id": "u1", "player_id": "irving", "round": 15, "is_keeper": True},
+        {"season": 2026, "owner_id": "u1", "player_id": "irving", "round": 13, "is_keeper": True},
+    ])
+    ledger = build_keeper_ledger(df, RULES).sort_values("season")
+    row_2026 = ledger[ledger["season"] == 2026].iloc[0]
+    assert row_2026["original_round"] == 15  # not 18 (the UDFA default)
+    assert row_2026["expected_round_formula"] == 13
+    assert row_2026["formula_mismatch"] == False  # noqa: E712
+    assert row_2026["next_season_keeper_round"] == 11
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
