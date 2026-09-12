@@ -48,9 +48,12 @@ def compute_fantasy_points(df, rules):
     if "receiving_2pt_conversions" in df.columns:
         fp += df["receiving_2pt_conversions"].fillna(0) * get_rule(rules, "receiving", "receiving_two_pt")
 
-    # Fumbles
-    if "fumbles_lost" in df.columns:
-        fp += df["fumbles_lost"].fillna(0) * get_rule(rules, "fumbles", "fumbles_lost")
+    # Fumbles — flat penalty regardless of position (QB/RB/WR/TE all lose
+    # the same points per fumble lost). The raw dataset has no column
+    # literally named "fumbles_lost"; the pre-aggregated sum across
+    # sack/rushing/receiving fumbles lost is "fumbles_lost_total".
+    if "fumbles_lost_total" in df.columns:
+        fp += df["fumbles_lost_total"].fillna(0) * get_rule(rules, "fumbles", "fumbles_lost")
 
     return fp
 

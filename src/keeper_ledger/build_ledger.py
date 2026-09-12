@@ -235,6 +235,21 @@ def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFram
     `expected_round_formula`/`formula_mismatch` are only computed for
     season >= `rule_effective_season`; earlier seasons are recorded but
     not validated, since a different or no formal rule applied then.
+
+    NOTE ON SCOPE: this ledger does NOT project future keeper cost for
+    currently-rostered players — it only covers rows that already went
+    through an actual draft pick. It intentionally has no
+    `next_season_keeper_round` column (an earlier version did, computed
+    naively as `round_paid_actual - rounds_lost` with none of the anchor
+    fallbacks above) — that column silently disagreed with the correct
+    forward projection once waiver-acquired keepers, the rule-era
+    boundary, and UDFA fallbacks were fixed. The single source of truth
+    for "what would it cost to keep this player next year" is
+    scripts/project_roster_keeper_costs.py, which reads this ledger's
+    `keeps_since_rule_start`/`is_keeper` columns as input but runs the
+    full three-tier anchor resolution (including the in-season-waiver
+    branch) on top — covering every current roster, not just players
+    who already have draft history.
     """
     rounds_lost = rules["escalation"]["rounds_lost"]
     min_round = rules["escalation"]["min_round"]
@@ -287,17 +302,7 @@ def build_keeper_ledger(draft_history: pd.DataFrame, rules: dict) -> pd.DataFram
                 ),
             })
 
-    ledger = pd.DataFrame(ledger_rows)
-
-    # Forward-looking projection: next season, if this owner keeps this
-    # player again, the cost is THIS year's actual round minus another
-    # rounds_lost — this doesn't need the era counter, it's just "one
-    # more compounding step from wherever they currently sit."
-    ledger["next_season_keeper_round"] = (
-        (ledger["round_paid_actual"] - rounds_lost).clip(lower=min_round)
-    )
-
-    return ledger
+    return pd.DataFrame(ledger_rows)
 
 
 # ---------------------------------------------------------------------------
