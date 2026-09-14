@@ -9,11 +9,28 @@ a network-sandboxed environment without egress to api.sleeper.app. Run it
 somewhere with internet access (your machine, Claude Code, CI, etc.).
 """
 
+import re
 import time
 import requests
 
 BASE_URL = "https://api.sleeper.app/v1"
 _SLEEP_BETWEEN_CALLS = 0.15  # seconds, politeness delay
+
+_TEAM_CODE_PATTERN = re.compile(r"^[A-Z]{2,3}$")
+
+# Franchises Sleeper gave a "preview" alias stub under their FUTURE code,
+# years before the real move happened — confirmed directly: the raw
+# response for 2017-2019 has BOTH "OAK" and "LV" keys, byte-for-byte
+# identical, because the Raiders' relocation was announced in March 2017
+# but the team didn't actually play in Las Vegas until the 2020 season.
+# SD->LAC (2017) and STL->LAR (2016) transitioned in the same season the
+# move took effect, with no such overlap — checked every week of both
+# transition seasons directly, zero weeks where both codes appear.
+# {future_code: legacy_code} — when both are present for the same week,
+# keep the legacy/era-accurate code (the team's real name/location that
+# season) and drop the alias, so `total_demand`/replacement-level ranking
+# sees exactly one row per real team per week, not two identical ones.
+_FUTURE_ALIAS_OF_LEGACY = {"LV": "OAK"}
 
 
 def _get(path: str) -> dict | list:
@@ -108,19 +125,29 @@ def get_stats_week(season: int, week: int) -> dict:
     """
     Raw weekly stats for every player AND team unit, keyed by id. This
     endpoint mixes several different kinds of entries under one dict —
-    numeric player_ids, `TEAM_<ABBR>` entries (that team's own aggregate
+    numeric player_ids, alphanumeric player_ids (confirmed real: e.g.
+    "1339z" in 2021 week 6 is an actual player's receiving stat line, not
+    a team — a non-digit-only id, so an "exclude digits" filter alone lets
+    it through), `TEAM_<ABBR>` entries (that team's own aggregate
     OFFENSIVE box score — pass_yd, rush_yd, etc., NOT defense), and plain
     `<ABBR>` entries (that team's actual DEFENSE/special-teams stat line).
 
-    This wrapper filters down to ONLY the plain team-abbreviation keys —
-    real team defense — dropping every numeric player_id and every
-    `TEAM_`-prefixed entry. Filtered by PATTERN (non-numeric, not
-    `TEAM_`-prefixed), not a hardcoded list of current team abbreviations
-    — Sleeper uses ERA-ACCURATE codes for relocated/renamed franchises
-    (OAK not LV pre-2020, SD not LAC pre-2017, STL not LAR pre-2016), so
-    a hardcoded current-team allowlist would silently drop those
-    franchises' historical seasons. Confirmed clean across 2009/2015/
-    2020/2025: exactly 32 real team codes every time, nothing stray.
+    This wrapper filters down to ONLY real team-abbreviation keys by
+    PATTERN MATCH — exactly 2-3 uppercase letters, nothing else — rather
+    than an exclusion-based heuristic. Confirmed this positive pattern
+    matches precisely the 32 real team codes (or fewer on a bye-heavy
+    week) across 2009/2017/2021/2025, with zero stray matches, and
+    correctly excludes "1339z" that the old digit-exclusion filter missed.
+
+    It then resolves a real relocation-alias duplicate: some franchises
+    get a "preview" stub under their FUTURE code years before the real
+    move (confirmed: 2017-2019 has BOTH "OAK" and "LV" keys, byte-for-byte
+    identical, since the Raiders' move was announced in 2017 but didn't
+    happen until 2020 — SD->LAC and STL->LAR had no such overlap, checked
+    every week of both transition seasons directly). When both a legacy
+    and its future-alias code appear for the same week, the legacy/
+    era-accurate code is kept and the alias dropped, so callers never see
+    the same real team twice under two different keys.
 
     Also confirmed via a real example: `TEAM_DET`'s "td" and plain
     `DET`'s "td" were identical (both mirroring the team's total
@@ -137,4 +164,20 @@ def get_stats_week(season: int, week: int) -> dict:
     data = _get(f"/stats/nfl/regular/{season}/{week}")
     if not isinstance(data, dict):
         return {}
-    return {k: v for k, v in data.items() if not k.isdigit() and not k.startswith("TEAM_")}
+
+    teams = {k: v for k, v in data.items() if _TEAM_CODE_PATTERN.fullmatch(k)}
+
+    for future_code, legacy_code in _FUTURE_ALIAS_OF_LEGACY.items():
+        if future_code in teams and legacy_code in teams:
+            # Both present for the same week: confirmed this only ever
+            # happens as an identical alias stub, never conflicting data.
+            # Assert that expectation rather than silently trusting it —
+            # if it's ever NOT identical, that's a real discrepancy worth
+            # surfacing, not papering over.
+            assert teams[future_code] == teams[legacy_code], (
+                f"{legacy_code}/{future_code} alias mismatch in {season} week {week} — "
+                "expected identical stub data, got different values."
+            )
+            del teams[future_code]
+
+    return teams
