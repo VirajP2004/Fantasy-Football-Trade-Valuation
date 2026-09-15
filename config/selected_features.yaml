@@ -1,0 +1,50 @@
+# Locked feature selection, per position — a documented DECISION, not something
+# re-derived live every time 05_feature_selection.ipynb happens to be rerun.
+#
+# Why this file exists: 05_feature_selection.ipynb's RFECV output pulls live
+# nflreadpy data and can (and does) pick a different feature set between runs as
+# upstream data gets corrected -- see README.md's data-freshness note for a real
+# example of this happening to RB (receiving_epa newly selected, 4 features -> 5,
+# 2026-09-15). Once a position has an actual tuned model notebook built against a
+# specific feature set, that set is locked here so a routine rerun of 05 can't
+# silently change what the shipped model is retrained against.
+#
+# How to change an entry: retune that position's 06x_model_*.ipynb against the new
+# feature set, confirm it's a real improvement (not just what RFECV happened to
+# pick that day), and update this file in the SAME commit as the notebook change.
+# Never edit this file on its own just because 05 produced a different list.
+
+QB:
+  features:
+    - scarcity_z
+    - draft_pick_inverse
+    - vorp_delta_yoy
+    - passing_epa
+    - age
+    - ol_pass_protection_proxy
+  locked_by: notebooks/06a_model_qb.ipynb
+  source: 05_feature_selection.ipynb RFECV run, Phase 3
+  notes: >
+    Monotonic constraints were checked and rejected for the shipped model --
+    the unconstrained run beat the constrained one on both MAE and Spearman.
+    See 06a_model_qb.ipynb's constrained-vs-unconstrained diagnostic.
+
+RB:
+  features:
+    - scarcity_z
+    - vorp_delta_yoy
+    - age
+    - draft_pick_inverse
+  locked_by: notebooks/06b_model_rb.ipynb
+  source: 05_feature_selection.ipynb RFECV run, Phase 3
+  notes: >
+    Monotonic constraints were checked and KEPT for the shipped model -- the
+    opposite conclusion from QB's. Constraining scarcity_z/vorp_delta_yoy
+    beat the unconstrained run on MAE here. See 06b_model_rb.ipynb's
+    constrained-vs-unconstrained diagnostic.
+
+# WR, TE, K, DEF: no tuned model notebook exists yet as of this file's creation
+# (2026-09-15). Do not add an entry for one of these until a 06x_model_<position>.ipynb
+# is actually built and its feature set deliberately chosen -- until then,
+# 05_feature_selection.ipynb's RFECV output for these positions is exploratory
+# only, never a locked decision.
