@@ -62,6 +62,24 @@
 
 ---
 
+## ⚠️ KNOWN FEATURE LIMITATION: `vorp_delta_yoy`'s extreme tail — confirmed cross-position (QB + RB)
+
+**Finding:** `vorp_delta_yoy` (year-over-year VORP swing) degrades sharply in its own extreme tail (`|delta| > 100`), independently confirmed for both positions modeled so far via bucket-MAE:
+- **QB**: MAE 51.88 (`|delta|`≤100) vs. 67.16 (`|delta|`>100) — 1.29x worse. The extreme bucket's *in-sample* MAE (70.09) even exceeds the shipped model's own honest *held-out* MAE (67.72).
+- **RB**: MAE 40.43 vs. 56.89 — 1.41x worse, same anomaly, more pronounced (56.89 vs. 46.67 held-out, 1.22x).
+
+**Confirmed feature-specific, not a general "extremes are hard" problem**: the identical bucket-MAE method applied to `scarcity_z` (the model's dominant feature by a wide margin) at its own extremes (top/bottom deciles) shows no such pattern for either position — extreme `scarcity_z` rows fit *better* than the middle 80% and comfortably beat each model's held-out MAE. This is a structural weakness specific to the rate-of-change feature, not a property of extreme feature values in general.
+
+**Real fixes tested and rejected on evidence, not assumption** (`05b_qb_feature_experiment.ipynb`):
+- Removing `vorp_delta_yoy` and replacing it with decomposed `td_rate_over_expected`/`attempts_trend_yoy` — RFECV rejected both outright, whether tried as a replacement or added alongside the existing delta.
+- Winsorizing the feature at its 5th/95th percentile — made held-out MAE *and* Spearman worse, and did not pull the affected players' predictions toward more reasonable values.
+
+**Standing mitigation — a flag, not a resolved fix**: `low_confidence_extreme_delta` (`|vorp_delta_yoy| > 100`) is attached to every QB prediction in `06a_model_qb.ipynb`, same flag-not-drop pattern as Phase 2's `low_snap_next_season`. Direction/ranking stays trustworthy on a flagged row (Spearman holds within ~0.01 of the overall model in this region, both positions); the exact predicted number does not (roughly 1 in 4 historical analogs in this range missed by 100+ points). RB's model should get the same flag wired in before it's treated as fully documented.
+
+**Not yet checked: WR and TE.** This has now shown up identically at two independent positions — real evidence this may be a property of the feature itself (a genuinely noisy, mean-reverting quantity by construction) rather than a QB/RB-specific quirk. Check this the same way (bucket-MAE, `scarcity_z` comparison) during WR's and TE's own Phase 4 notebooks, before assuming it doesn't apply.
+
+---
+
 ## Phase 5 — Interpretability Layer: SHAP
 **Goal:** Every KVS number is explainable — for QB/RB/WR/TE only, matching Phase 4's scope.
 
