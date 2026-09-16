@@ -50,7 +50,7 @@
 ## Phase 4 — Stage 1 Model: XGBoost VORP Regressor — 🟡 NEXT
 **Goal:** Trained, validated, per-position models producing the Keeper Value Score (KVS) — **rescoped to 4 positions: QB, RB, WR, TE.**
 
-- [ ] Four separate notebooks: `06a_model_qb.ipynb`, `06b_model_rb.ipynb`, `06c_model_wr.ipynb`, `06d_model_te.ipynb` — each trained on its Phase 3-selected feature set
+- [x] Four separate notebooks: `06a_model_qb.ipynb`, `06b_model_rb.ipynb`, `06c_model_wr.ipynb` (QB/RB/WR done — TE still pending), `06d_model_te.ipynb` — each trained on its Phase 3-selected feature set
 - [ ] **Real hyperparameter tuning** (nested inside each walk-forward fold) — the Phase 3 naive-baseline results used an untuned estimator; this is the step that tests whether real tuning meaningfully closes the gap, and by how much
 - [ ] Monotonic constraints where domain logic is unambiguous
 - [ ] Per-fold MAE/RMSE/Spearman saved to `/data/processed/fold_metrics_<position>.csv` (already exists in skeleton form from Phase 3; Phase 4 replaces these with tuned-model numbers)
@@ -62,21 +62,22 @@
 
 ---
 
-## ⚠️ KNOWN FEATURE LIMITATION: `vorp_delta_yoy`'s extreme tail — confirmed cross-position (QB + RB)
+## ⚠️ KNOWN FEATURE LIMITATION: `vorp_delta_yoy`'s extreme tail — confirmed cross-position (QB + RB + WR)
 
-**Finding:** `vorp_delta_yoy` (year-over-year VORP swing) degrades sharply in its own extreme tail (`|delta| > 100`), independently confirmed for both positions modeled so far via bucket-MAE:
+**Finding:** `vorp_delta_yoy` (year-over-year VORP swing) degrades sharply in its own extreme tail (`|delta| > 100`), independently confirmed for all three positions modeled so far via bucket-MAE:
 - **QB**: MAE 51.88 (`|delta|`≤100) vs. 67.16 (`|delta|`>100) — 1.29x worse. The extreme bucket's *in-sample* MAE (70.09) even exceeds the shipped model's own honest *held-out* MAE (67.72).
 - **RB**: MAE 40.43 vs. 56.89 — 1.41x worse, same anomaly, more pronounced (56.89 vs. 46.67 held-out, 1.22x).
+- **WR**: MAE 37.09 vs. 53.90 — 1.45x worse, the largest degradation of the three, measured directly on pooled held-out (out-of-fold) predictions across all 8 folds. WR's own quartile breakdown shows a clean monotonic rise (31.6 → 36.7 → 39.9 → 45.1 MAE across quartiles of `|vorp_delta_yoy|`), the cleanest version of this pattern seen yet.
 
-**Confirmed feature-specific, not a general "extremes are hard" problem**: the identical bucket-MAE method applied to `scarcity_z` (the model's dominant feature by a wide margin) at its own extremes (top/bottom deciles) shows no such pattern for either position — extreme `scarcity_z` rows fit *better* than the middle 80% and comfortably beat each model's held-out MAE. This is a structural weakness specific to the rate-of-change feature, not a property of extreme feature values in general.
+**Feature-specific for the delta itself, but the `scarcity_z` control comparison no longer holds uniformly**: QB and RB both showed `scarcity_z` extremes (top/bottom deciles) fitting *better* than the middle 80%, supporting "this is `vorp_delta_yoy`-specific, not extremes-are-hard." **WR breaks this cleanly**: its two `scarcity_z` tails diverge sharply — bottom decile (replacement-level) is easy (MAE 21.85, comfortably better than middle-80%'s 36.71), but the **top decile (the actual WR1s) is the hardest segment in the entire dataset** (MAE 55.64, worse even than the `vorp_delta_yoy` extreme-tail bucket). Averaged together the two tails look roughly flat vs. overall MAE (38.75 vs. 37.12), which would have hidden the asymmetry if the diagnostic had stopped at the combined number. Read this as: `vorp_delta_yoy`'s extreme-tail weakness is now a robust 3-for-3 finding, but "scarcity_z's extremes are always easy" does NOT generalize past RB — WR's own dominant feature has a real weak spot at the top end that QB and RB didn't surface.
 
 **Real fixes tested and rejected on evidence, not assumption** (`05b_qb_feature_experiment.ipynb`):
 - Removing `vorp_delta_yoy` and replacing it with decomposed `td_rate_over_expected`/`attempts_trend_yoy` — RFECV rejected both outright, whether tried as a replacement or added alongside the existing delta.
 - Winsorizing the feature at its 5th/95th percentile — made held-out MAE *and* Spearman worse, and did not pull the affected players' predictions toward more reasonable values.
 
-**Standing mitigation — a flag, not a resolved fix**: `low_confidence_extreme_delta` (`|vorp_delta_yoy| > 100`) is attached to every QB prediction in `06a_model_qb.ipynb`, same flag-not-drop pattern as Phase 2's `low_snap_next_season`. Direction/ranking stays trustworthy on a flagged row (Spearman holds within ~0.01 of the overall model in this region, both positions); the exact predicted number does not (roughly 1 in 4 historical analogs in this range missed by 100+ points). RB's model should get the same flag wired in before it's treated as fully documented.
+**Standing mitigation — a flag, not a resolved fix**: `low_confidence_extreme_delta` (`|vorp_delta_yoy| > 100`) is attached to every prediction in `06a_model_qb.ipynb` and now `06c_model_wr.ipynb` (built in from the start for WR, rather than added after the fact), same flag-not-drop pattern as Phase 2's `low_snap_next_season`. Direction/ranking stays trustworthy on a flagged row (Spearman holds close to the overall model in this region across positions); the exact predicted number does not (roughly 1 in 4 historical analogs in this range missed by 100+ points, QB's figure). RB's model should still get the same flag wired directly into its own notebook before it's treated as fully documented there.
 
-**Not yet checked: WR and TE.** This has now shown up identically at two independent positions — real evidence this may be a property of the feature itself (a genuinely noisy, mean-reverting quantity by construction) rather than a QB/RB-specific quirk. Check this the same way (bucket-MAE, `scarcity_z` comparison) during WR's and TE's own Phase 4 notebooks, before assuming it doesn't apply.
+**Not yet checked: TE.** Confirmed identically at three independent positions now — strong evidence this is a property of the feature itself (a genuinely noisy, mean-reverting quantity by construction), not a position-specific quirk. Check the same way (bucket-MAE, `scarcity_z` comparison) during TE's own Phase 4 notebook, before assuming it doesn't apply.
 
 ---
 

@@ -43,7 +43,25 @@ RB:
     beat the unconstrained run on MAE here. See 06b_model_rb.ipynb's
     constrained-vs-unconstrained diagnostic.
 
-# WR, TE, K, DEF: no tuned model notebook exists yet as of this file's creation
+WR:
+  features:
+    - scarcity_z
+    - wopr
+    - vorp_delta_yoy
+    - receiving_epa
+    - air_yards_share
+    - age
+    - draft_pick_inverse
+    - target_share
+  locked_by: notebooks/06c_model_wr.ipynb
+  source: 05_feature_selection.ipynb RFECV run, Phase 3
+  notes: >
+    Monotonic constraints were checked and REJECTED for the shipped model --
+    the unconstrained run beat the constrained one on both MAE and Spearman,
+    siding with QB rather than RB. See 06c_model_wr.ipynb's
+    constrained-vs-unconstrained diagnostic.
+
+# TE, K, DEF: no tuned model notebook exists yet as of this file's creation
 # (2026-09-15). Do not add an entry for one of these until a 06x_model_<position>.ipynb
 # is actually built and its feature set deliberately chosen -- until then,
 # 05_feature_selection.ipynb's RFECV output for these positions is exploratory
