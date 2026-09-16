@@ -61,7 +61,29 @@ WR:
     siding with QB rather than RB. See 06c_model_wr.ipynb's
     constrained-vs-unconstrained diagnostic.
 
-# TE, K, DEF: no tuned model notebook exists yet as of this file's creation
+TE:
+  features:
+    - scarcity_z
+    - air_yards_share
+    - receiving_epa
+    - wopr
+    - target_share
+    - draft_tier_Round 2-3
+    - draft_pick_inverse
+    - vorp_delta_yoy
+    - injury_designations_count
+  locked_by: notebooks/06d_model_te.ipynb
+  source: 05_feature_selection.ipynb RFECV run, Phase 3
+  notes: >
+    Monotonic constraints were checked and KEPT for the shipped model, but
+    this was TE's own genuine tie, not a clean win like QB/RB/WR: the
+    constrained run won MAE (26.33 vs. 26.59) while the unconstrained run
+    won Spearman by a noise-level 0.002 (0.691 vs. 0.689). Broken toward
+    the constrained model because MAE is what this notebook's tuning
+    objective directly optimizes. See 06d_model_te.ipynb's
+    constrained-vs-unconstrained diagnostic for the full reasoning.
+
+# K, DEF: no tuned model notebook exists yet as of this file's creation
 # (2026-09-15). Do not add an entry for one of these until a 06x_model_<position>.ipynb
 # is actually built and its feature set deliberately chosen -- until then,
 # 05_feature_selection.ipynb's RFECV output for these positions is exploratory
