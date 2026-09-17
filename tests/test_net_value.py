@@ -9,20 +9,18 @@ data, and is exercised for real in notebooks/09_trade_engine_demo.ipynb
 instead.
 """
 
-import math
-
 import pandas as pd
 import pytest
 
 from src.trade_engine.draft_capital_curve import build_draft_capital_curve
 from src.trade_engine.net_value import (
     CAVEAT_TEXT,
-    RELIABILITY_TIER_HEURISTIC,
-    RELIABILITY_TIER_MODEL,
+    UnsupportedPositionError,
     compute_flags,
     evaluate_net_value,
-    group_by_reliability_tier,
+    evaluate_player_trade_value,
     net_value_from_projected_round,
+    predict_kvs,
 )
 
 
@@ -84,7 +82,6 @@ def test_no_caveats_when_no_flags_set():
     assert result.caveats == []
     assert result.low_confidence_extreme_delta is False
     assert result.no_delta_history is False
-    assert result.used_heuristic is False
 
 
 def test_low_confidence_extreme_delta_caveat_never_silently_dropped():
@@ -105,25 +102,12 @@ def test_no_delta_history_caveat_never_silently_dropped():
     assert CAVEAT_TEXT["no_delta_history"] in result.caveats
 
 
-def test_used_heuristic_caveat_never_silently_dropped():
+def test_both_caveats_can_coexist():
     result = evaluate_net_value(
-        "Test Kicker", 2026, "K", predicted_kvs=10.0, keeper_cost_vorp_value=5.0,
-        used_heuristic=True,
-    )
-    assert result.used_heuristic is True
-    assert CAVEAT_TEXT["used_heuristic"] in result.caveats
-
-
-def test_all_three_caveats_can_coexist():
-    """Nothing about these three flags is mutually exclusive -- a K/DEF
-    heuristic prediction with a missing delta history must carry BOTH
-    caveats, not just one."""
-    result = evaluate_net_value(
-        "Test Kicker", 2026, "K", predicted_kvs=10.0, keeper_cost_vorp_value=5.0,
-        no_delta_history=True, used_heuristic=True,
+        "Test Player", 2026, "QB", predicted_kvs=10.0, keeper_cost_vorp_value=5.0,
+        low_confidence_extreme_delta=True, no_delta_history=True,
     )
     assert len(result.caveats) == 2
-    assert result.low_confidence_extreme_delta is False
 
 
 # ---------------------------------------------------------------------------
@@ -152,78 +136,46 @@ def test_net_value_from_projected_round_falls_back_for_unseen_round():
 
 
 # ---------------------------------------------------------------------------
-# reliability_tier -- must be a first-class, queryable/filterable field, not
-# just a string buried in the caveats list.
+# K/DEF are out of scope: predict_kvs and evaluate_player_trade_value must
+# raise UnsupportedPositionError, never return a number of any kind (no
+# heuristic fallback exists in this module any more).
 # ---------------------------------------------------------------------------
 
-def test_reliability_tier_is_model_when_not_heuristic():
-    result = evaluate_net_value("Test Player", 2026, "RB", predicted_kvs=10.0, keeper_cost_vorp_value=5.0)
-    assert result.reliability_tier == RELIABILITY_TIER_MODEL
+def test_predict_kvs_raises_for_k():
+    with pytest.raises(UnsupportedPositionError):
+        predict_kvs("Any Kicker", 2025, "K", repo_root=".")
 
 
-def test_reliability_tier_is_heuristic_when_used_heuristic_true():
-    result = evaluate_net_value(
-        "Test Kicker", 2026, "K", predicted_kvs=10.0, keeper_cost_vorp_value=5.0, used_heuristic=True
-    )
-    assert result.reliability_tier == RELIABILITY_TIER_HEURISTIC
+def test_predict_kvs_raises_for_def():
+    with pytest.raises(UnsupportedPositionError):
+        predict_kvs("Any Defense", 2025, "DEF", repo_root=".")
 
 
-def test_reliability_tier_is_directly_filterable_without_parsing_caveats():
-    """The whole point of this field: a caller must be able to filter/query
-    it directly (`r.reliability_tier == ...`), not grep the free-text
-    `caveats` list for a substring."""
-    results = [
-        evaluate_net_value("Model Player", 2026, "WR", predicted_kvs=50.0, keeper_cost_vorp_value=10.0),
-        evaluate_net_value("Heuristic Kicker", 2026, "K", predicted_kvs=20.0, keeper_cost_vorp_value=5.0, used_heuristic=True),
-    ]
-    model_only = [r for r in results if r.reliability_tier == RELIABILITY_TIER_MODEL]
-    heuristic_only = [r for r in results if r.reliability_tier == RELIABILITY_TIER_HEURISTIC]
-    assert [r.player_name for r in model_only] == ["Model Player"]
-    assert [r.player_name for r in heuristic_only] == ["Heuristic Kicker"]
+def test_predict_kvs_k_error_references_scope_decision():
+    """The error must actually explain itself, not just fail silently or
+    with a generic message -- someone hitting this should be pointed at
+    the reasoning, not left to guess why."""
+    with pytest.raises(UnsupportedPositionError, match="06_scope_decision_k_def"):
+        predict_kvs("Any Kicker", 2025, "K", repo_root=".")
 
 
-# ---------------------------------------------------------------------------
-# group_by_reliability_tier -- tiers must never blend into one ranked list.
-# ---------------------------------------------------------------------------
-
-def test_group_by_reliability_tier_separates_model_and_heuristic():
-    results = [
-        evaluate_net_value("Model A", 2026, "RB", predicted_kvs=100.0, keeper_cost_vorp_value=0.0),
-        evaluate_net_value("Heuristic A", 2026, "DEF", predicted_kvs=200.0, keeper_cost_vorp_value=0.0, used_heuristic=True),
-        evaluate_net_value("Model B", 2026, "WR", predicted_kvs=50.0, keeper_cost_vorp_value=0.0),
-    ]
-    tiers = group_by_reliability_tier(results)
-    assert set(tiers.keys()) == {RELIABILITY_TIER_MODEL, RELIABILITY_TIER_HEURISTIC}
-    assert {r.player_name for r in tiers[RELIABILITY_TIER_MODEL]} == {"Model A", "Model B"}
-    assert {r.player_name for r in tiers[RELIABILITY_TIER_HEURISTIC]} == {"Heuristic A"}
+def test_evaluate_player_trade_value_raises_for_k():
+    with pytest.raises(UnsupportedPositionError):
+        evaluate_player_trade_value("Any Kicker", 2025, "K", projected_keeper_round=10, draft_curve=_simple_curve(), repo_root=".")
 
 
-def test_group_by_reliability_tier_never_lets_heuristic_outrank_model_in_same_list():
-    """The exact scenario that motivated this: a heuristic prediction with
-    a huge raw net_kvs_delta (200) must NEVER appear ranked above, or even
-    in the same list as, a model prediction with a smaller one (100) --
-    they must live in two separate lists, full stop."""
-    results = [
-        evaluate_net_value("Model A", 2026, "RB", predicted_kvs=100.0, keeper_cost_vorp_value=0.0),
-        evaluate_net_value("Heuristic A", 2026, "DEF", predicted_kvs=200.0, keeper_cost_vorp_value=0.0, used_heuristic=True),
-    ]
-    tiers = group_by_reliability_tier(results)
-    model_names = [r.player_name for r in tiers[RELIABILITY_TIER_MODEL]]
-    heuristic_names = [r.player_name for r in tiers[RELIABILITY_TIER_HEURISTIC]]
-    assert "Heuristic A" not in model_names
-    assert "Model A" not in heuristic_names
+def test_evaluate_player_trade_value_raises_for_def():
+    with pytest.raises(UnsupportedPositionError):
+        evaluate_player_trade_value("Any Defense", 2025, "DEF", projected_keeper_round=10, draft_curve=_simple_curve(), repo_root=".")
 
 
-def test_group_by_reliability_tier_sorts_within_each_tier_descending():
-    results = [
-        evaluate_net_value("Model Low", 2026, "RB", predicted_kvs=10.0, keeper_cost_vorp_value=0.0),
-        evaluate_net_value("Model High", 2026, "RB", predicted_kvs=90.0, keeper_cost_vorp_value=0.0),
-        evaluate_net_value("Heuristic Low", 2026, "K", predicted_kvs=5.0, keeper_cost_vorp_value=0.0, used_heuristic=True),
-        evaluate_net_value("Heuristic High", 2026, "K", predicted_kvs=40.0, keeper_cost_vorp_value=0.0, used_heuristic=True),
-    ]
-    tiers = group_by_reliability_tier(results)
-    assert [r.player_name for r in tiers[RELIABILITY_TIER_MODEL]] == ["Model High", "Model Low"]
-    assert [r.player_name for r in tiers[RELIABILITY_TIER_HEURISTIC]] == ["Heuristic High", "Heuristic Low"]
+def test_unsupported_position_error_is_not_raised_for_modeled_positions():
+    """Guard against a too-broad check accidentally catching real
+    positions -- this should fail for a totally different reason (no real
+    vorp_labels.parquet at this repo_root), never UnsupportedPositionError."""
+    with pytest.raises(Exception) as exc_info:
+        predict_kvs("Nonexistent Player", 2025, "QB", repo_root="/nonexistent/repo/root")
+    assert not isinstance(exc_info.value, UnsupportedPositionError)
 
 
 if __name__ == "__main__":

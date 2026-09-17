@@ -48,6 +48,25 @@ or any of the richer rounds. `build_draft_capital_curve` below implements
 this as a real, configurable, unit-tested mechanism -- not a one-off
 manual fix -- so it also does the right thing if a future re-run's live
 data shifts which rounds are thin.
+
+K/DEF FRESH PICKS ARE DELIBERATELY *INCLUDED* IN THIS CURVE, EVEN THOUGH
+`net_value.py` REFUSES TO EVALUATE K/DEF PLAYERS AT ALL: checked directly
+(not assumed to follow the same exclusion just because both modules live
+under `trade_engine/`), 38 real K/DEF fresh picks (19 K + 19 DEF) exist
+in the 2024-2025 window and pass through this module's crosswalk and
+banding exactly like any other position, no filter anywhere excludes
+them. This is the right call, not an oversight: this curve answers "what
+is a fresh pick at round N actually worth, given who really gets
+drafted there" -- a market-pricing question about the DRAFT SLOT, not
+about any one position. Late rounds in this league (and real fantasy
+drafts generally) are disproportionately K/DEF -- round 18 alone is 7 of
+its 10 usable picks -- so excluding them would badly understate what a
+late-round pick actually costs to acquire, replacing a real market
+composition with an artificially skill-position-only one.
+`net_value.py`'s refusal to evaluate a K/DEF *player* is a completely
+separate decision (no trustworthy predicted_KVS exists for those
+positions), and does not imply this curve should stop pricing the
+draft slots those players actually occupy.
 """
 
 import json

@@ -3,15 +3,32 @@ Trade Engine -- Net Value.
 
 net_KVS_delta = predicted_KVS - keeper_cost_VORP
 
-`predicted_KVS` is the player's predicted next-season VORP: from the
-appropriate position's tuned XGBoost model (QB/RB/WR/TE) for the four
-real-modeled positions, or from the explicitly-labeled K/DEF heuristic
-(current-season realized VORP, per roadmap.md's Phase 4 scope decision --
-no ML model exists or is planned for K/DEF) for the other two.
+`predicted_KVS` is the player's predicted next-season VORP, from the
+appropriate position's tuned XGBoost model (QB/RB/WR/TE) -- the only four
+positions this module supports. **K and DEF are out of scope, full stop**:
+`predict_kvs`/`evaluate_player_trade_value` raise `UnsupportedPositionError`
+for either position rather than returning a number of any kind. This
+follows `roadmap.md`'s Phase 4 scope decision directly (see
+`notebooks/06_scope_decision_k_def.ipynb` for the full reasoning: DEF's
+untuned model actively underperformed simple persistence, K/DEF have a
+structurally thin feature set, and both show real-world year-to-year
+volatility no available features capture well) -- no ML model, and no
+non-ML heuristic either, is produced for K/DEF anywhere in this module.
+An earlier version of this module *did* have a K/DEF heuristic path
+(current-season realized VORP, explicitly labeled as non-model output);
+it has been removed entirely, not just hidden, because a heuristic
+number sitting next to real model predictions in the same return type is
+too easy to misuse downstream regardless of how it's labeled -- an
+explicit error at the boundary is safer than a value that still has to
+be filtered back out later.
 
 `keeper_cost_VORP` is `scripts/project_roster_keeper_costs.py`'s
 already-validated projected keeper round, converted to a VORP figure via
-`draft_capital_curve.keeper_cost_vorp`.
+`draft_capital_curve.keeper_cost_vorp`. (Note: the draft capital curve
+itself still legitimately includes K/DEF fresh picks in its per-round
+averages -- pricing what a round is worth is a different question from
+whether a specific player can be evaluated, since any position can
+occupy any round. See `draft_capital_curve.py`'s own module docstring.)
 
 CONFIDENCE FLAGS ARE NEVER DROPPED SILENTLY: every `NetValueResult` this
 module produces carries `low_confidence_extreme_delta` and
@@ -23,20 +40,14 @@ Phase 5 SHAP notebooks) have used all along:
     every `06x_model_*.ipynb` notebook found degrades held-out MAE.
   - `no_delta_history`: `vorp_delta_yoy` is null (typically a true
     rookie) -- kept as a SEPARATE flag from the above, never folded into
-    it (seeroadmap.md's `NaN > threshold` bug writeup) -- a missing
+    it (see roadmap.md's `NaN > threshold` bug writeup) -- a missing
     delta is a different kind of uncertainty than a measured extreme one.
-The K/DEF heuristic path computes these two flags too (from raw VORP
-history, no model needed) rather than omitting them just because there's
-no tuned model backing that prediction -- and additionally carries its
-own `used_heuristic=True` caveat, since a heuristic prediction should
-never be presented with the same confidence as a real model's output.
 """
 
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional
 
-import numpy as np
 import pandas as pd
 
 from src.trade_engine.draft_capital_curve import keeper_cost_vorp
@@ -51,7 +62,7 @@ POSITION_FEATURES = {
            "draft_tier_Round 2-3", "draft_pick_inverse", "vorp_delta_yoy", "injury_designations_count"],
 }
 MODELED_POSITIONS = set(POSITION_FEATURES)
-HEURISTIC_POSITIONS = {"K", "DEF"}
+UNSUPPORTED_POSITIONS = {"K", "DEF"}
 
 CAVEAT_TEXT = {
     "low_confidence_extreme_delta": (
@@ -64,17 +75,14 @@ CAVEAT_TEXT = {
         "rookie) -- a DIFFERENT and separate reason for caution than low_confidence_extreme_delta, "
         "not a stronger or weaker version of it."
     ),
-    "used_heuristic": (
-        "used_heuristic: predicted_KVS comes from the K/DEF non-ML heuristic (current-season "
-        "realized VORP), not a tuned model -- per roadmap.md's Phase 4 scope decision, no "
-        "XGBoost model or SHAP explainer exists for K/DEF. Do not read this with the same "
-        "confidence as a QB/RB/WR/TE prediction."
-    ),
 }
 
 
-RELIABILITY_TIER_MODEL = "model"
-RELIABILITY_TIER_HEURISTIC = "heuristic"
+class UnsupportedPositionError(ValueError):
+    """Raised for any position this module will not produce a predicted_KVS
+    for -- currently K and DEF, per roadmap.md's Phase 4 scope decision.
+    Never caught internally and silently papered over with a fallback
+    number; this is meant to stop a caller at the boundary."""
 
 
 @dataclass
@@ -87,13 +95,6 @@ class NetValueResult:
     net_kvs_delta: float
     low_confidence_extreme_delta: bool
     no_delta_history: bool
-    used_heuristic: bool
-    # First-class field, not something a caller has to dig out of `caveats` --
-    # a heuristic-based net_kvs_delta is not on the same scale of evidence as
-    # a real model's, and this needs to be directly queryable/filterable
-    # (`result.reliability_tier == "model"`), not just present as a string
-    # buried in a free-text list.
-    reliability_tier: str = RELIABILITY_TIER_MODEL
     caveats: list = field(default_factory=list)
 
 
@@ -110,7 +111,6 @@ def evaluate_net_value(
     *,
     low_confidence_extreme_delta: bool = False,
     no_delta_history: bool = False,
-    used_heuristic: bool = False,
 ) -> NetValueResult:
     """Combines an already-computed prediction and keeper cost into a
     `NetValueResult`, attaching every applicable caveat explicitly. This
@@ -122,8 +122,6 @@ def evaluate_net_value(
         caveats.append(CAVEAT_TEXT["low_confidence_extreme_delta"])
     if no_delta_history:
         caveats.append(CAVEAT_TEXT["no_delta_history"])
-    if used_heuristic:
-        caveats.append(CAVEAT_TEXT["used_heuristic"])
 
     return NetValueResult(
         player_name=player_name,
@@ -134,30 +132,8 @@ def evaluate_net_value(
         net_kvs_delta=predicted_kvs - keeper_cost_vorp_value,
         low_confidence_extreme_delta=low_confidence_extreme_delta,
         no_delta_history=no_delta_history,
-        used_heuristic=used_heuristic,
-        reliability_tier=RELIABILITY_TIER_HEURISTIC if used_heuristic else RELIABILITY_TIER_MODEL,
         caveats=caveats,
     )
-
-
-def group_by_reliability_tier(results: list) -> dict:
-    """Groups NetValueResults by `reliability_tier` and sorts each group
-    independently by `net_kvs_delta`, descending.
-
-    Deliberately returns SEPARATE lists per tier rather than one merged,
-    globally-sorted list: a heuristic prediction's net_kvs_delta is not on
-    the same scale of evidence as a real model's, so interleaving them
-    into a single ranked list would silently imply they're directly
-    comparable, which they are not. Any future ranking/sorting UI should
-    build on this function (or replicate its tier-separation), not sort
-    `NetValueResult`s by `net_kvs_delta` alone.
-    """
-    tiers: dict = {}
-    for result in results:
-        tiers.setdefault(result.reliability_tier, []).append(result)
-    for tier_results in tiers.values():
-        tier_results.sort(key=lambda r: r.net_kvs_delta, reverse=True)
-    return tiers
 
 
 def net_value_from_projected_round(
@@ -278,37 +254,29 @@ def predict_kvs(
     position: str,
     repo_root: Path,
     vorp_labels: Optional[pd.DataFrame] = None,
-) -> tuple[float, bool, bool, bool]:
-    """Returns (predicted_kvs, low_confidence_extreme_delta, no_delta_history, used_heuristic)
-    for a real player+season, using the appropriate tuned model for QB/RB/WR/TE
-    or the K/DEF heuristic otherwise."""
+) -> tuple[float, bool, bool]:
+    """Returns (predicted_kvs, low_confidence_extreme_delta, no_delta_history)
+    for a real player+season, using the appropriate tuned model.
+
+    Raises `UnsupportedPositionError` for K or DEF -- no model, and no
+    heuristic fallback, is produced for either position (see this
+    module's docstring)."""
     import xgboost as xgb
     import nflreadpy as nfl
+
+    if position in UNSUPPORTED_POSITIONS:
+        raise UnsupportedPositionError(
+            f"Position '{position}' is out of scope for trade evaluation. Per roadmap.md's "
+            "Phase 4 scope decision, no XGBoost model or SHAP explainer exists or is planned "
+            "for K/DEF -- see notebooks/06_scope_decision_k_def.ipynb for the full reasoning. "
+            "This function will not return a predicted_KVS of any kind for this position."
+        )
+    if position not in MODELED_POSITIONS:
+        raise ValueError(f"Unknown position: {position!r}")
 
     repo_root = Path(repo_root)
     if vorp_labels is None:
         vorp_labels = pd.read_parquet(repo_root / "data/processed/vorp_labels.parquet")
-
-    if position in HEURISTIC_POSITIONS:
-        row = vorp_labels[
-            (vorp_labels["position"] == position)
-            & (vorp_labels["player_display_name"] == player_name)
-            & (vorp_labels["season"] == season)
-        ]
-        if row.empty:
-            raise ValueError(f"No vorp_labels row for {player_name} ({position}, {season})")
-        row = row.iloc[0]
-        prior = vorp_labels[
-            (vorp_labels["position"] == position)
-            & (vorp_labels["player_id"] == row["player_id"])
-            & (vorp_labels["season"] == season - 1)
-        ]
-        delta = row["vorp"] - prior.iloc[0]["vorp"] if not prior.empty else np.nan
-        low_conf, no_hist = compute_flags(delta)
-        return float(row["vorp"]), low_conf, no_hist, True
-
-    if position not in MODELED_POSITIONS:
-        raise ValueError(f"Unsupported position: {position}")
 
     nfl_players = nfl.load_players().to_pandas()
     if position == "QB":
@@ -333,7 +301,7 @@ def predict_kvs(
     predicted = float(model.predict(pd.DataFrame([row[features]], columns=features))[0])
 
     low_conf, no_hist = compute_flags(row["vorp_delta_yoy"])
-    return predicted, low_conf, no_hist, False
+    return predicted, low_conf, no_hist
 
 
 def evaluate_player_trade_value(
@@ -345,13 +313,16 @@ def evaluate_player_trade_value(
     repo_root: Path,
     vorp_labels: Optional[pd.DataFrame] = None,
 ) -> NetValueResult:
-    """End-to-end convenience: predicts KVS (model or heuristic), prices
-    the projected keeper round via the draft capital curve, and returns
-    the full NetValueResult with every applicable caveat attached."""
-    predicted_kvs, low_conf, no_hist, used_heuristic = predict_kvs(
+    """End-to-end convenience: predicts KVS, prices the projected keeper
+    round via the draft capital curve, and returns the full
+    NetValueResult with every applicable caveat attached.
+
+    Raises `UnsupportedPositionError` for K or DEF -- propagated directly
+    from `predict_kvs` (see this module's docstring)."""
+    predicted_kvs, low_conf, no_hist = predict_kvs(
         player_name, season, position, repo_root, vorp_labels=vorp_labels
     )
     return net_value_from_projected_round(
         player_name, season, position, predicted_kvs, projected_keeper_round, draft_curve,
-        low_confidence_extreme_delta=low_conf, no_delta_history=no_hist, used_heuristic=used_heuristic,
+        low_confidence_extreme_delta=low_conf, no_delta_history=no_hist,
     )

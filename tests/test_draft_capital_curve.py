@@ -133,6 +133,37 @@ def test_resolve_fresh_picks_excludes_keepers_and_other_seasons():
     assert set(resolved["player_id"]) == {"p1", "p4"}
 
 
+def test_resolve_fresh_picks_does_not_exclude_k_or_def():
+    """Locks in a deliberate design decision (see this module's own
+    docstring): this curve prices what a draft SLOT is worth, and real
+    late rounds are disproportionately K/DEF -- excluding them here would
+    be a completely different, wrong decision from net_value.py's
+    separate refusal to EVALUATE a K/DEF player. Nothing in
+    resolve_fresh_picks/attach_realized_vorp should ever filter by
+    position; this test exists so that filter can't be added by accident
+    later without a test failing to flag it."""
+    draft_history = pd.DataFrame([
+        {"season": 2025, "player_id": "kicker1", "round": 18, "is_keeper": False},
+        {"season": 2025, "player_id": "PIT", "round": 17, "is_keeper": False},
+    ])
+    sleeper_players = {
+        "kicker1": {"position": "K", "full_name": "Test Kicker", "gsis_id": "00-0000009"},
+        "PIT": {"position": "DEF", "player_id": "PIT"},
+    }
+    nfl_players = pd.DataFrame([{"display_name": "x", "position": "QB", "gsis_id": "00-9999999"}])
+
+    resolved = resolve_fresh_picks(draft_history, sleeper_players, nfl_players, seasons=[2025])
+    assert set(resolved["player_id"]) == {"kicker1", "PIT"}
+
+    vorp_labels = pd.DataFrame([
+        {"season": 2025, "player_id": "00-0000009", "vorp": 12.5},
+        {"season": 2025, "player_id": "PIT", "vorp": -8.0},
+    ])
+    with_vorp = attach_realized_vorp(resolved, vorp_labels)
+    assert with_vorp["vorp"].notna().all()
+    assert set(with_vorp["vorp"]) == {12.5, -8.0}
+
+
 def test_attach_realized_vorp_uses_vorp_not_vorp_next():
     resolved_picks = pd.DataFrame([
         {"season": 2024, "round": 1, "vorp_key": "00-0000001"},
