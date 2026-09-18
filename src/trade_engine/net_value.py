@@ -161,6 +161,20 @@ def net_value_from_projected_round(
 # tested surface is evaluate_net_value/net_value_from_projected_round above.
 # ---------------------------------------------------------------------------
 
+def position_std_vorp_that_season(vorp_labels: pd.DataFrame, position: str, season: int) -> float:
+    """The same `position_std_vorp_that_season` quantity `_add_scarcity_z_and_delta`
+    computes internally below (and discards once `scarcity_z` is derived from
+    it) -- exposed here as its own small, pure, testable function so a
+    caller outside this module (`positional_need.py`'s VORP-unit
+    conversion factor, via `evaluate_trade.py`) gets the IDENTICAL number
+    `scarcity_z` was itself standardized against, rather than re-deriving
+    it a second, possibly-diverging way."""
+    position_rows = vorp_labels[(vorp_labels["position"] == position) & (vorp_labels["season"] == season)]
+    if position_rows.empty:
+        raise ValueError(f"No {position!r} rows for season {season} in vorp_labels")
+    return float(position_rows["vorp"].std())
+
+
 def _add_scarcity_z_and_delta(df: pd.DataFrame, vorp_labels: pd.DataFrame, position: str) -> pd.DataFrame:
     season_position_stats = (
         vorp_labels.groupby(["season", "position"])["vorp"]

@@ -95,28 +95,28 @@
 ## Phase 5 — Interpretability Layer: SHAP
 **Goal:** Every KVS number is explainable — for QB/RB/WR/TE only, matching Phase 4's scope.
 
-- [ ] SHAP values per player-season prediction, per position
-- [ ] Summary plots (global) + force/waterfall plots (local, per-player — what gets shown in an actual trade dispute)
-- [ ] `explain_player(player, season) -> top_5_drivers` reusable function
+- [x] SHAP values per player-season prediction, per position (`notebooks/08a-d_shap_*.ipynb`, one per position)
+- [x] Summary plots (global beeswarm) + force/waterfall plots (local, per-player) — all four `08x_shap_*.ipynb` notebooks
+- [x] `explain_player(player, season) -> top_5_drivers` reusable function — **actually reusable as of Phase 6's integration work, not before.** What existed through tonight was four byte-identical copies of this function, one pasted into each `08x_shap_*.ipynb`, never promoted into an importable module (`src/explain/` sat in the repo the whole time, completely empty). `src/explain/explain_player.py` is that promotion, built when `evaluate_trade.py` needed a real, callable `explain_player` and the gap went from a cosmetic checklist miss to an actual blocker. Reuses `net_value.py`'s own panel builders (`build_qb_panel` etc.) rather than re-deriving the same features a second, possibly-diverging way.
 
-**Exit criterion:** Given any QB/RB/WR/TE player, a human-readable "why this KVS" breakdown.
+**Exit criterion:** Given any QB/RB/WR/TE player, a human-readable "why this KVS" breakdown. Met — and now callable from outside a notebook.
 
 ---
 
 ## Phase 6 — Stage 2: Trade Fairness Engine
 **Goal:** KVS → actionable trade verdict, combined with Phase 1B's keeper cost machinery.
 
-- [ ] Draft capital curve (`draft_capital_curve.py`, dormant since Phase 1B) — now finally computable with real VORP data. Confirmed applicable to BOTH keeper cost pricing AND real traded draft picks (same underlying "what does a Round N pick typically return" question)
+- [x] Draft capital curve (`draft_capital_curve.py`, dormant since Phase 1B) — now finally computable with real VORP data. Confirmed applicable to BOTH keeper cost pricing AND real traded draft picks (same underlying "what does a Round N pick typically return" question)
 - [ ] Open design questions for this phase specifically: how much to discount future draft picks (more uncertain than this year's), and whether to blend multiple draft-class years or treat each independently
-- [ ] Net KVS delta = predicted KVS − keeper_cost_VORP, using `scripts/project_roster_keeper_costs.py`'s validated projections
+- [x] Net KVS delta = predicted KVS − keeper_cost_VORP, using `scripts/project_roster_keeper_costs.py`'s validated projections (`net_value.py`)
 - [x] K/DEF trades: **entirely unsupported, not a heuristic fallback.** `net_value.py`'s `predict_kvs`/`evaluate_player_trade_value` raise `UnsupportedPositionError` for either position, full stop -- no ML model and no non-ML heuristic number is produced for K/DEF anywhere in the trade engine. (Supersedes this line's original wording, "K/DEF trades handled via the simple heuristic from the scope decision" -- that plan was implemented, then removed; see reasoning below.)
   - **Why the heuristic was removed rather than kept and labeled:** an earlier version of this module did exactly that -- a simple, explicitly-flagged non-ML heuristic (current-season realized VORP) for K/DEF. Used for real tonight, it produced the HOU DEF/Cam Little ranking problem: a heuristic-based number sitting next to real model predictions in the same return type, that despite being labeled, still read as comparable/trustworthy once actually consumed downstream. A caveat only protects a reader who keeps reading past it; an `UnsupportedPositionError` at the boundary can't be quietly misread the same way. Full exclusion is safer and more honest than a careful-but-still-comparable approximation.
   - **The draft capital curve makes the opposite call, correctly:** `draft_capital_curve.py` still deliberately includes K/DEF fresh picks in its per-round averages. Pricing what a draft slot is worth at round N (a market-composition question -- who actually gets picked there; late rounds in this league are disproportionately K/DEF) is a different question from evaluating one specific K/DEF player's trade value (no trustworthy `predicted_KVS` exists for either position) -- excluding K/DEF from the curve would understate real late-round pick cost for no benefit to the problem the trade-engine exclusion is actually solving.
 - [x] Positional scarcity/need adjustment on top of raw delta (`positional_need.py`)
 - [x] Fairness score normalization (`fairness_score.py`)
-- [ ] Combine with SHAP output: fairness verdict + top drivers per side
+- [x] Combine with SHAP output: fairness verdict + top drivers per side (`evaluate_trade.py`) — the final integration point. Per player: `evaluate_player_trade_value` → `apply_positional_need_adjustment` (against the RECEIVING team's real roster) → summed per side → `compute_fairness_score` → the 1-2 players per side actually driving that side's total (largest `|adjusted_net_kvs_delta|`, good or bad) get a real `explain_player` call. Every caveat any player carries survives the full pipeline, tagged by side and player, never dropped or anonymized. Demonstrated end to end on two real trades between actual rostered players in `notebooks/10_evaluate_trade_demo.ipynb` — both landed in `fairness_score.py`'s both-negative fallback path on real data, not just the unit test that found it.
 
-**Exit criterion:** Given two proposed trade packages, a fairness score and explanation of what's driving the imbalance.
+**Exit criterion:** Given two proposed trade packages, a fairness score and explanation of what's driving the imbalance. Met.
 
 ---
 

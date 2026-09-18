@@ -20,8 +20,33 @@ from src.trade_engine.net_value import (
     evaluate_net_value,
     evaluate_player_trade_value,
     net_value_from_projected_round,
+    position_std_vorp_that_season,
     predict_kvs,
 )
+
+
+# ---------------------------------------------------------------------------
+# position_std_vorp_that_season
+# ---------------------------------------------------------------------------
+
+def _vorp_labels_fixture():
+    return pd.DataFrame([
+        {"position": "RB", "season": 2025, "vorp": 10.0},
+        {"position": "RB", "season": 2025, "vorp": 30.0},
+        {"position": "RB", "season": 2025, "vorp": 50.0},
+        {"position": "RB", "season": 2024, "vorp": 1000.0},  # different season, must be ignored
+        {"position": "WR", "season": 2025, "vorp": 999.0},  # different position, must be ignored
+    ])
+
+
+def test_position_std_vorp_that_season_matches_manual_std():
+    result = position_std_vorp_that_season(_vorp_labels_fixture(), "RB", 2025)
+    assert result == pytest.approx(20.0)  # std of [10, 30, 50]
+
+
+def test_position_std_vorp_that_season_raises_for_no_matching_rows():
+    with pytest.raises(ValueError):
+        position_std_vorp_that_season(_vorp_labels_fixture(), "TE", 2025)
 
 
 # ---------------------------------------------------------------------------
