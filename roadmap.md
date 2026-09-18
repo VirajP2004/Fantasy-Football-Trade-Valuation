@@ -120,7 +120,28 @@
 
 ---
 
-## Phase 7 — Backtesting Against Real League History
+## Phase 7 — Backtesting Against Real League History — 🔴 BLOCKED (not skipped, not deferred)
+
+**A true walk-forward backtest is not currently possible with this league's data.** Checked directly, not assumed: pulled every real transaction from Sleeper across this league's full season chain (`get_league_chain`, `get_transactions`, type=`"trade"`, status=`"complete"`, all weeks, all seasons).
+
+**What the check found:**
+- The league itself only has 3 seasons on Sleeper at all: 2024, 2025 (both complete), 2026 (in progress, week 2 of an 18-week season, trade deadline week 12). `previous_league_id` is `None` for 2024 — the chain ends there; the league did not exist before it.
+- **12 real, completed trades exist total**: 3 in 2024 (weeks 4, 5, 7), 9 in 2025 (three in the pre-season window Sleeper buckets as week 1, then weeks 7, 7, 10, 10, 11, 12). **Zero trades in 2026 so far.**
+- The shipped QB/RB/WR/TE models are trained on all data through the 2024 season, with the real 2025 outcome as the training label — confirmed directly against `vorp_labels.parquet`, not inferred from the roadmap's own Phase 4 wording: season-2024 rows have 518 non-null `vorp_next` values (real, used-in-training labels), while season-2025 rows have 0 non-null `vorp_next` (684 rows, all live-prediction-only, feeding the 2026 forecast, never trained on directly).
+
+**Why this makes all 12 real trades unusable for backtesting, not just weaker evidence:**
+- The 3 **2024** trades involve players whose actual 2025 outcome is the literal label the model learned from.
+- The 9 **2025** trades involve players' then-current 2025 performance — the same training label, for the same players, in the same season the trade happened in. This is the *most* contaminated case, not a milder one.
+- Evaluating any of these 12 trades with the current models would be the model grading its own training labels, not genuine validation. There is no framing (caveated, sanity-check, or otherwise) that turns that into real evidence — the leak is total, not partial, so a softened claim would still be a false one.
+
+**Why this is structural, not a gap that more effort closes:** Phase 4 deliberately trains the final shipped models on all data through the most recent complete season, for the best possible live-prediction accuracy (`roadmap.md`, Phase 4). With only 2 complete seasons of league history, that training cutoff and the league's entire trade history are necessarily the same two seasons — maximizing model accuracy and holding out this league's trades for backtesting are mutually exclusive with the data that currently exists. No amount of additional engineering fixes this; only time does.
+
+**The actual condition for Phase 7 to become possible:** 2026 completing. It is the first season with zero trade contamination — no 2026 outcome is in the training data (models are trained through 2024→2025 only), and any trade made during 2026 would be evaluating players against a real, still-unknown-at-trade-time future outcome. Once the 2026 season resolves and its real VORP is computed, any of 2026's trades (zero so far, but the season is only 2 weeks old and the trade deadline is week 12) become genuine, walk-forward-clean backtest cases for the first time in this project's history.
+
+**Until then:** Phase 7 stays blocked. If a sanity check against the 12 existing trades is wanted in the meantime, it must be labeled explicitly as hindsight-informed (the model already knows how these players' seasons turned out), not as validation or evidence the trade engine works — consistent with this project's standing rule that a leaky check doesn't get presented as proof just because a real check would be more work.
+
+---
+
 ## Phase 8 — Packaging & Delivery
 
 (Unchanged from original plan — see prior roadmap version for full detail.)
@@ -138,3 +159,4 @@
 - **Every feature-importance or model-performance claim gets checked against a naive baseline before being trusted** — added as a rule after this exact check surfaced DEF's real weakness in Phase 3.
 - **Scope decisions (like excluding K/DEF) get documented with the evidence behind them**, not silently absorbed as an unexplained gap.
 - Commit fold metrics and SHAP summaries to the repo.
+- **A leaky evaluation never gets presented as validation, however it's labeled.** Added after Phase 7's real trade-history check: all 12 of this league's real trades fall inside the training window (its own real 2025 outcome is a training label), so there is no caveat that turns evaluating them into evidence — either the evaluation is genuinely held-out, or it's clearly stated as hindsight-informed and not proof of anything.
