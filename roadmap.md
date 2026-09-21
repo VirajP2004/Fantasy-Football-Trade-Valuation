@@ -142,7 +142,7 @@
 
 ---
 
-## Phase 8 — Packaging & Delivery
+## Phase 8 — Packaging & Delivery — ✅ COMPLETE
 
 **Note:** this section previously read "(Unchanged from original plan — see prior roadmap version for full detail.)" going all the way back to this repo's first commit — the actual "original plan" it refers to predates this repo's git history and isn't recoverable from it. The checklist below is written fresh, from Part 1's real scope, rather than left as an unresolvable pointer.
 
@@ -152,9 +152,9 @@
 - [x] `model_version` as a single bump point — `src/trade_engine/config.py`'s `MODEL_VERSION` ("2026-v1"), threaded through the app into every logged row rather than hardcoded per-callsite.
 - [x] History tab — reads the SQLite log, most-recent-first table.
 
-**Part 2 — not yet started**
-- [ ] Retraining runbook (when/how to re-run Stage 1 training, bump `MODEL_VERSION`, and what regressions to check for before shipping a retrain)
-- [ ] README updates reflecting the Streamlit app as the actual delivery surface (setup, `streamlit run app.py`, screenshot)
+**Part 2**
+- [x] Retraining runbook — `RETRAINING.md`: pull fresh Sleeper data, rebuild the keeper ledger, append a new walk-forward fold per position, re-tune and re-lock model artifacts against the naive-baseline check, bump `MODEL_VERSION`, redeploy.
+- [x] README rewritten around the Streamlit app as the actual delivery surface — `README.md`: problem statement, two-stage architecture, methodology, verified key findings and limitations, tech stack, `streamlit run app.py` setup, real repo structure.
 
 ---
 
