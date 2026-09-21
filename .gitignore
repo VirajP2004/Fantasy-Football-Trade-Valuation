@@ -179,3 +179,10 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Trade-log SQLite DB (app.py / trade_log.py) -- runtime-generated local
+# history, created fresh on first log_trade() call if missing, never
+# meant to be committed.
+data/processed/trade_log.sqlite
+*.sqlite
+*.sqlite3

@@ -144,7 +144,17 @@
 
 ## Phase 8 — Packaging & Delivery
 
-(Unchanged from original plan — see prior roadmap version for full detail.)
+**Note:** this section previously read "(Unchanged from original plan — see prior roadmap version for full detail.)" going all the way back to this repo's first commit — the actual "original plan" it refers to predates this repo's git history and isn't recoverable from it. The checklist below is written fresh, from Part 1's real scope, rather than left as an unresolvable pointer.
+
+**Part 1 — Trade-evaluation interface**
+- [x] ~~CLI trade-evaluation tool~~ — replaced by a Streamlit app (`app.py`) instead: pick Team A/Team B, multi-select players per side, real-time `evaluate_trade` call, fairness verdict + net KVS delta + caveats + top SHAP drivers rendered per side.
+- [x] Trade-history logging — `src/trade_engine/trade_log.py`, SQLite-backed (`data/processed/trade_log.sqlite`), pure row-builder unit-tested in `tests/test_trade_log.py`. Every successful "Evaluate Trade" click writes one row.
+- [x] `model_version` as a single bump point — `src/trade_engine/config.py`'s `MODEL_VERSION` ("2026-v1"), threaded through the app into every logged row rather than hardcoded per-callsite.
+- [x] History tab — reads the SQLite log, most-recent-first table.
+
+**Part 2 — not yet started**
+- [ ] Retraining runbook (when/how to re-run Stage 1 training, bump `MODEL_VERSION`, and what regressions to check for before shipping a retrain)
+- [ ] README updates reflecting the Streamlit app as the actual delivery surface (setup, `streamlit run app.py`, screenshot)
 
 ---
 
