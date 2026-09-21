@@ -2,14 +2,7 @@
 
 League configured: `1371612837679464448` (see `config/keeper_rules.yaml`)
 
-## Status
-
-- ✅ Escalation logic implemented and unit-tested (6/6 passing) against synthetic data.
-- ⚠️ **Live pull not yet run.** This sandbox has no network access to `api.sleeper.app`
-  (confirmed: 403 from the egress proxy on this environment). You need to run the
-  pull step somewhere with internet access.
-
-## To run it for real
+## How to (re)run it
 
 ```bash
 pip install pandas pyyaml requests
@@ -21,8 +14,8 @@ This walks the league's `previous_league_id` chain back through every prior
 season, pulls each season's draft picks, and writes:
 - `data/raw/draft_history.parquet` — flattened raw picks, one row per
   (season, owner_id, player_id)
-- `data/processed/keeper_ledger.parquet` — the escalation ledger with
-  `next_season_keeper_round` and a `formula_mismatch` QA flag
+- `data/processed/keeper_ledger.parquet` — the escalation ledger, with an
+  `expected_round_formula`/`formula_mismatch` QA flag pair (see below)
 
 ## Before you trust the output
 
@@ -38,14 +31,10 @@ season, pulls each season's draft picks, and writes:
    owner_id, player_id, is_keeper`), keyed by the same `owner_id` you'll
    see in the ledger output (pull `/league/<id>/users` to map `owner_id` ->
    display name for building that file by hand).
-3. **`draft_capital_curve.py` won't run yet** — it needs `vorp_labels.parquet`,
-   which is a Phase 2 deliverable that doesn't exist in this repo yet. The
-   function is ready; nothing else blocks it.
-
-## Next step
-
-Either:
-- Connect Claude for Chrome in this session and ask me to pull it live, or
-- Run `python -m src.keeper_ledger.build_ledger` yourself and drop the two
-  output parquet files back here so I can sanity-check the escalation
-  output against your actual league before we move to Phase 2.
+3. **This ledger does not itself project *next* season's keeper cost** —
+   it only covers rows that already went through an actual draft pick, by
+   design (see `build_keeper_ledger`'s docstring). The single source of
+   truth for "what would it cost to keep this player next year" is
+   `scripts/project_roster_keeper_costs.py`, which reads this ledger's
+   `keeps_since_rule_start`/`is_keeper` columns and runs the full
+   three-tier anchor resolution on top of them.
