@@ -47,7 +47,7 @@
 
 ---
 
-## Phase 4 — Stage 1 Model: XGBoost VORP Regressor — 🟡 NEARLY DONE
+## Phase 4 — Stage 1 Model: XGBoost VORP Regressor — ✅ COMPLETE
 **Goal:** Trained, validated, per-position models producing the Keeper Value Score (KVS) — **rescoped to 4 positions: QB, RB, WR, TE.**
 
 - [x] Four separate notebooks: `06a_model_qb.ipynb`, `06b_model_rb.ipynb`, `06c_model_wr.ipynb`, `06d_model_te.ipynb` — all four done, each trained on its Phase 3-selected (now locked, see `config/selected_features.yaml`) feature set
@@ -56,9 +56,9 @@
 - [x] Per-fold MAE/RMSE/Spearman saved to `/data/processed/fold_metrics_<position>.csv` for all four positions
 - [x] **Rerun the naive-baseline comparison with tuned models** — done for all four; QB/RB/WR each show a real, modest, same-direction lift on both metrics, while TE's tuned Spearman (0.689) does not clear its own naive baseline (0.691), the first position where that's true
 - [x] Lock final model artifacts trained on all data through the most recent complete season — `qb_model.json`, `rb_model.json`, `wr_model.json`, `te_model.json` all exist
-- [ ] `07_model_comparison_summary.ipynb` — one consolidated notebook comparing all 4 positions' final tuned performance side-by-side (naive vs. tuned, MAE, Spearman) — next up
+- [x] `07_model_comparison_summary.ipynb` — one consolidated notebook comparing all 4 positions' final tuned performance side-by-side (naive vs. tuned, MAE, Spearman) — done; tuned MAE beats naive at every position, by 2.7% (RB) to 6.6% (QB), the numbers `README.md` now cites directly
 
-**Exit criterion:** Four `KVS = predict(player, season)` functions (QB/RB/WR/TE only), each with a fold-by-fold validation report — including an honest, quantified comparison against the naive baseline, not just an assumed improvement. **Met for all four positions individually**; only the consolidated cross-position summary notebook remains before Phase 4 can be marked fully complete.
+**Exit criterion:** Four `KVS = predict(player, season)` functions (QB/RB/WR/TE only), each with a fold-by-fold validation report — including an honest, quantified comparison against the naive baseline, not just an assumed improvement. **Met for all four positions, individually and consolidated.**
 
 ---
 
