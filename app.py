@@ -252,6 +252,34 @@ def evaluate_trade_page(data: dict):
         log_trade(row)
         st.caption(f"Logged to trade history (model version {MODEL_VERSION}).")
 
+    _render_how_to_read()
+
+
+def _render_how_to_read():
+    with st.expander("How to read this", expanded=True):
+        st.markdown(
+            "**Predicted KVS** — the model's raw projection of how much value this player "
+            "will produce next season, before anything else is factored in.\n"
+            "- Higher # = the model expects more production from this player.\n\n"
+            "**Keeper cost** — what it costs you in draft capital to keep this player next year.\n"
+            "- Higher # = it costs you more to keep them (a better draft pick). This isn't a "
+            "knock on the player — a great player naturally has a high keeper cost.\n\n"
+            "**Need adj.** — an adjustment based on how deep your team already is at that position.\n"
+            "- Higher # = your team is thin there, so this player helps you more.\n"
+            "- Lower # = your team is already deep there, so one more player at that spot helps less.\n\n"
+            "**Adjusted delta** — the bottom-line number: is this player worth more than what it "
+            "costs to keep them, for your specific team. This is the number that matters most.\n"
+            "- Higher # (closer to zero or positive) = better value for that side of the trade.\n"
+            "- Lower # (more negative) = worse value for that side of the trade.\n\n"
+            "**Fairness %** — how evenly the trade's total value is split between both sides.\n"
+            "- Closer to 50% = an even trade.\n"
+            "- Further from 50% = more lopsided — whoever's above 50% got the better end of it.\n\n"
+            "One important note: these numbers are based on each player's full 2025 season, not "
+            "anything that's happened in 2026 so far (including this week). This tool tells you "
+            "if a trade is fair based on who a player was heading into this year — not how "
+            "they're playing right now."
+        )
+
 
 def history_page():
     history = get_trade_history()
